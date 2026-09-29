@@ -1,0 +1,1045 @@
+:root {
+  --bg: #0b0e13;
+  --panel: #141922;
+  --panel-2: #1b212c;
+  --line: #2a3242;
+  --ink: #e6ecf5;
+  --dim: #8b97a8;
+  --accent: #5aa9ff;
+  --warn: #ffb454;
+  --good: #57d9a3;
+  --paper: #dfe6ef;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.app { display: flex; flex-direction: column; height: 100vh; }
+
+.topbar {
+  display: flex; align-items: baseline; gap: 12px;
+  padding: 14px 20px; border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.topbar h1 { font-size: 15px; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
+.topbar-hint { font-size: 11px; color: var(--dim); margin-left: auto; }
+.tag {
+  font-size: 11px; color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: 99px; padding: 2px 9px;
+}
+
+/* One workspace: the tool rail, the model, and the settings. The flat pattern
+   used to have a column of its own; it is now an overlay, so the model gets
+   everything that is left. */
+.layout {
+  display: grid;
+  grid-template-columns: 268px minmax(0, 1fr) 300px;
+  flex: 1; min-height: 0; position: relative;
+}
+
+.panel {
+  background: var(--panel); border-right: 1px solid var(--line);
+  overflow-y: auto; padding: 4px 0;
+}
+.panel.left { border-right: 1px solid var(--line); }
+.panel.right { border-right: none; border-left: 1px solid var(--line); }
+.panel section { padding: 16px; border-bottom: 1px solid var(--line); }
+.panel h2 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em;
+  color: var(--dim); margin: 0 0 12px;
+}
+
+label { display: block; font-size: 12px; color: var(--dim); margin-bottom: 12px; }
+label output { float: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+select, input[type='range'] { width: 100%; margin-top: 6px; }
+select {
+  background: var(--panel-2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 7px;
+  padding: 7px 8px; font-size: 12px;
+}
+input[type='range'] { accent-color: var(--accent); }
+
+button {
+  background: var(--panel-2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 7px;
+  padding: 7px 10px; font-size: 12px; cursor: pointer;
+  font-family: inherit;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.35; cursor: default; }
+button.on { background: color-mix(in srgb, var(--accent) 22%, var(--panel-2)); border-color: var(--accent); }
+button small { display: block; font-size: 9px; color: var(--dim); }
+
+.sense-toggle, .mode-toggle, .tool-toggle {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px;
+}
+.tool-toggle.three { grid-template-columns: repeat(3, 1fr); }
+.tool-toggle.three button { padding: 7px 4px; }
+.workbar-group.grab-toggle button { min-width: 44px; }
+.grab-label { font-size: 10px; color: var(--dim); align-self: center; margin-right: 2px; }
+.grid-toggle { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 6px; }
+.grid-toggle button { padding: 7px 4px; }
+/* A button that only leaves a mark, wherever it sits. */
+button.crease-btn { color: var(--good); }
+.history li.crease-step { background: color-mix(in srgb, var(--good) 9%, var(--panel-2)); }
+.history li.collapse-step { background: color-mix(in srgb, var(--accent) 12%, var(--panel-2)); }
+.history li.collapse-step .sense { color: var(--accent); }
+.history li.crease-step .sense { color: var(--good); }
+.presets { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+.history-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+
+.history { list-style: none; margin: 12px 0 0; padding: 0; font-size: 12px; }
+.history li {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px; border-radius: 6px; background: var(--panel-2); margin-bottom: 4px;
+}
+.history li.empty { background: none; color: var(--dim); justify-content: center; }
+.history .idx {
+  width: 18px; height: 18px; flex: none; display: grid; place-items: center;
+  background: var(--line); border-radius: 5px; font-size: 10px; color: var(--dim);
+}
+.history .sense { margin-left: auto; color: var(--accent); }
+.history .sense.mountain { color: var(--warn); }
+
+.readout { margin: 0; font-size: 12px; }
+.readout > div { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed var(--line); }
+.readout dt { color: var(--dim); }
+.readout dd { margin: 0; font-variant-numeric: tabular-nums; }
+.readout dd.warn { color: var(--warn); }
+.readout dd.good { color: var(--good); }
+
+.warning {
+  font-size: 11px; line-height: 1.6; color: var(--warn); margin: 10px 0 0;
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+  border-radius: 7px; padding: 8px 10px;
+}
+.note { font-size: 11px; line-height: 1.6; color: var(--dim); margin: 10px 0 0; }
+
+.stage {
+  display: flex; flex-direction: column; gap: 8px;
+  min-width: 0; min-height: 0; padding: 12px 14px 16px;
+}
+.stage.draft { position: relative; }
+.stage.solid { border-left: none; }
+
+/* The flat pattern opens over the work instead of sitting beside it, so the
+   model has the whole window while it is being folded. */
+.dieline-overlay {
+  position: absolute; inset: 0; z-index: 30;
+  display: flex; flex-direction: column;
+  background: var(--bg);
+}
+.dieline-overlay .canvas-wrap { flex: 1; min-height: 0; position: relative; }
+.stage-title {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 11px; color: var(--dim);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.mode-inline { display: flex; gap: 5px; margin-left: auto; }
+.mode-inline button { padding: 4px 9px; font-size: 11px; text-transform: none; letter-spacing: 0; }
+
+.canvas-wrap { flex: 1; min-height: 0; width: 100%; position: relative; }
+.fold-canvas { width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; }
+.fold-canvas.tool-align { cursor: pointer; }
+.fold-canvas.tool-measure { cursor: cell; }
+
+.stage3d {
+  flex: 1; min-height: 0; width: 100%; position: relative;
+  border: 1px solid var(--line); border-radius: 10px;
+  overflow: hidden; background: #0d1016;
+}
+/*
+ * The canvas fills its box, whatever the screen's pixel ratio.
+ *
+ * Three.js sizes the drawing buffer in device pixels, so on a retina screen it
+ * comes out twice as many across - and with nothing in the stylesheet to say
+ * otherwise the element lays out at that size, spilling off the right and the
+ * bottom of the stage where it is simply clipped. The model then sat half off
+ * the screen and no amount of re-framing the camera brought it back, because
+ * the camera was never the thing that was wrong.
+ */
+.stage3d canvas { display: block; width: 100%; height: 100%; }
+.fit-btn {
+  position: absolute; right: 10px; bottom: 10px; z-index: 2;
+  font-size: 11px; padding: 5px 10px;
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+}
+
+.canvas-bg { fill: #0f141c; }
+.sheet-ghost { fill: none; stroke: var(--line); stroke-dasharray: 3 4; }
+.ply {
+  fill: color-mix(in srgb, var(--paper) 20%, transparent);
+  stroke: none;
+}
+/* A faint edge so the paper still reads as paper, without cutting up overlaps. */
+.ply-edge {
+  fill: none;
+  stroke: color-mix(in srgb, var(--paper) 22%, transparent);
+  stroke-width: 0.6;
+  stroke-linejoin: round;
+}
+.moving-half { fill: color-mix(in srgb, var(--accent) 16%, transparent); pointer-events: none; }
+.crease { stroke-width: 1.6; pointer-events: none; }
+.crease.valley { stroke: #2563eb; }
+.crease.mountain { stroke: #dc2626; }
+
+.snap { fill: var(--dim); opacity: 0.4; }
+.snap.corner { fill: var(--accent); opacity: 0.8; }
+.snap.crease { fill: var(--good); opacity: 0.7; }
+.snap.grid { fill: var(--dim); opacity: 0.3; }
+.snap-hover { fill: none; stroke: var(--accent); stroke-width: 1.5; pointer-events: none; }
+.anchor { fill: var(--accent); }
+
+/* A crease is a line the paper remembers after being opened back up. */
+.crease-mark {
+  stroke: var(--good); stroke-width: 1.1;
+  stroke-dasharray: 2 3; opacity: 0.8; pointer-events: none;
+}
+
+.edge-hover { stroke: var(--accent); stroke-width: 3; opacity: 0.55; pointer-events: none; }
+.edge-picked { stroke: var(--good); stroke-width: 3; opacity: 0.9; pointer-events: none; }
+
+.grid line { stroke: var(--line); stroke-width: 0.5; opacity: 0.5; }
+.ruler rect { fill: var(--bg); }
+.tick { stroke: var(--dim); stroke-width: 0.8; opacity: 0.6; }
+.tick.major { stroke: var(--ink); stroke-width: 1; opacity: 0.8; }
+.tick-label { fill: var(--dim); font-size: 9px; font-family: inherit; font-variant-numeric: tabular-nums; }
+.tick-label.unit { fill: var(--accent); font-size: 8px; }
+
+/* Fixed to the workspace, not to a panel: the fold it finishes may have been
+   begun on the flat draft or on the model, and it has to be in the same place
+   either way. */
+.fold-chooser {
+  position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+  z-index: 40; max-width: calc(100vw - 32px); flex-wrap: nowrap;
+  display: flex; align-items: center; gap: 6px;
+  background: var(--panel); border: 1px solid var(--accent);
+  border-radius: 9px; padding: 6px 8px;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.45);
+}
+.fold-chooser .chooser-note {
+  font-size: 11px; color: var(--dim); padding-right: 6px;
+  border-right: 1px solid var(--line); margin-right: 2px;
+  white-space: nowrap; flex: none;
+}
+.fold-chooser button { white-space: nowrap; }
+
+.hud { fill: var(--dim); font-size: 11px; font-family: inherit; pointer-events: none; }
+.hud.dim { opacity: 0.6; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1100px) {
+  .layout { grid-template-columns: 1fr; overflow-y: auto; }
+  .panel { border: none; border-bottom: 1px solid var(--line); }
+}
+
+.macro {
+  margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line);
+}
+.macro-input .with-unit {
+  display: flex; align-items: center; gap: 6px; margin-top: 6px;
+}
+.macro-input input[type='number'] {
+  flex: 1; background: var(--panel-2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 7px;
+  padding: 7px 8px; font-size: 13px; font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.macro-input input[type='number']:focus { outline: none; border-color: var(--accent); }
+.macro-input em { font-style: normal; color: var(--dim); font-size: 12px; }
+.macro .presets { grid-template-columns: 1fr; }
+
+.chooser-angle { display: flex; align-items: center; gap: 5px; }
+.chooser-angle input[type='range'] { width: 84px; margin: 0; }
+.chooser-angle input[type='number'] {
+  width: 48px; background: var(--panel-2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 6px; padding: 4px 5px;
+  font-size: 12px; font-family: inherit; font-variant-numeric: tabular-nums;
+}
+.chooser-angle em { font-style: normal; color: var(--dim); font-size: 11px; }
+
+/* CAD-style dimensions: arrowed span, end caps, measured length in mm. */
+.dim line { stroke: var(--good); stroke-width: 1.1; }
+.dim .dim-cap { stroke-width: 1.5; }
+.dim .dim-dot { fill: var(--good); stroke: var(--bg); stroke-width: 0.8; }
+.dim-label {
+  fill: var(--good); font-size: 10px; font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round;
+}
+.dim.live line, .dim.live .dim-cap { stroke: var(--accent); }
+.dim.live .dim-dot { fill: var(--accent); }
+.dim.live .dim-label { fill: var(--accent); }
+#dimArrow path { fill: var(--good); }
+#dimArrowLive path { fill: var(--accent); }
+
+.snap.mark { fill: var(--good); opacity: 1; }
+.history li.dim-step { background: color-mix(in srgb, var(--good) 7%, var(--panel-2)); }
+.history li.dim-step .sense { color: var(--good); }
+
+@media (max-width: 1500px) {
+  .layout { grid-template-columns: 52px minmax(0, 1fr) minmax(0, 1fr) 268px; }
+}
+
+/* Tool rail: one glyph per tool, each on a single letter. */
+.tool-rail {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 10px 6px; background: var(--panel);
+  border-right: 1px solid var(--line);
+}
+.tool-rail button {
+  position: relative; display: flex; flex-direction: column;
+  align-items: center; gap: 2px;
+  padding: 8px 2px 6px; border-color: transparent; background: transparent;
+}
+.tool-rail button:hover { background: var(--panel-2); border-color: var(--line); }
+.tool-rail button.on {
+  background: color-mix(in srgb, var(--accent) 20%, var(--panel-2));
+  border-color: var(--accent);
+}
+.tool-rail svg {
+  width: 20px; height: 20px;
+  fill: none; stroke: currentColor; stroke-width: 1.6;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.tool-rail button.on svg { stroke: var(--accent); }
+.tool-rail .rail-name { font-size: 9px; color: var(--dim); }
+.tool-rail button.on .rail-name { color: var(--ink); }
+.tool-rail .rail-key {
+  position: absolute; top: 3px; right: 4px;
+  font-size: 8px; color: var(--dim); opacity: 0.7;
+}
+
+/* Dieline: the unfolded pattern, coded the way a drawing codes fold lines. */
+.dieline { width: 100%; height: 100%; display: block; }
+.cut-line { fill: color-mix(in srgb, var(--paper) 7%, transparent); stroke: var(--paper); stroke-width: 1.4; }
+.fold-line line { fill: none; stroke-width: 1.3; }
+.fold-line .hit { stroke: transparent; stroke-width: 12; cursor: pointer; }
+.fold-line.selected line { stroke-width: 2.6; }
+.fold-line.selected .hit { stroke: transparent; }
+.fold-angle {
+  fill: var(--ink); font-size: 9px; font-family: inherit;
+  paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round;
+}
+.legend-label { fill: var(--dim); font-size: 10px; font-family: inherit; }
+/* In the legend the class sits on the line itself, not on a wrapper. */
+.legend line.fold-line { fill: none; stroke-width: 1.3; }
+
+.crease-mark.selected { stroke: var(--accent); stroke-width: 2.4; opacity: 1; }
+
+/* Contextual inspector, in place of the settings when something is picked. */
+.inspector h2 { display: flex; align-items: center; justify-content: space-between; }
+.inspector .step-label {
+  font-size: 13px; color: var(--ink); margin: 0 0 14px;
+  padding: 8px 10px; background: var(--panel-2); border-radius: 7px;
+}
+button.ghost {
+  border-color: transparent; background: transparent;
+  color: var(--dim); font-size: 10px; padding: 3px 6px;
+}
+button.danger {
+  width: 100%; margin-top: 12px;
+  color: #ff9a8b; border-color: color-mix(in srgb, #ff6b5a 40%, transparent);
+}
+button.danger:hover:not(:disabled) { border-color: #ff6b5a; }
+.row-check {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--ink); margin: 12px 0 0;
+}
+.row-check input { width: auto; margin: 0; accent-color: var(--accent); }
+
+.history-section { margin-top: auto; }
+.history li { cursor: pointer; }
+.history li:hover { background: var(--line); }
+.history li.on {
+  background: color-mix(in srgb, var(--accent) 22%, var(--panel-2));
+  outline: 1px solid var(--accent);
+}
+
+/* Floating bar under the drawing: tools on the left, zoom on the right. */
+.canvas-bar {
+  position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 4px;
+  padding: 5px 6px; border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 22px rgb(0 0 0 / 0.45);
+  backdrop-filter: blur(6px);
+}
+.canvas-bar button { padding: 5px 10px; font-size: 11px; }
+.canvas-bar .zoom-pct { min-width: 52px; font-variant-numeric: tabular-nums; }
+.canvas-bar .bar-sep {
+  width: 1px; align-self: stretch; margin: 0 3px; background: var(--line);
+}
+
+.ply-picker { margin-bottom: 12px; }
+.ply-kinds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.ply-kinds button { padding: 7px 4px; font-size: 11px; }
+.ply-count { display: flex; align-items: center; gap: 7px; margin-top: 7px; }
+.ply-count input {
+  width: 62px; background: var(--panel-2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 7px;
+  font-size: 12px; font-family: inherit; font-variant-numeric: tabular-nums;
+}
+.ply-count em { font-style: normal; color: var(--dim); font-size: 11px; }
+.ply-picker .note { margin-top: 7px; }
+
+/* Where each crease meets the edge of the blank, measured along it. */
+.edge-mark circle { fill: var(--accent); }
+.edge-mark line { stroke: var(--accent); stroke-width: 0.8; opacity: 0.6; }
+.edge-mark text {
+  fill: var(--accent); font-size: 9px; font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round;
+}
+.dieline-bar {
+  position: absolute; left: 10px; top: 10px;
+  display: flex; gap: 5px; z-index: 2;
+}
+.dieline-bar button { padding: 4px 9px; font-size: 11px; }
+
+/*
+ * A fold the paper cannot take is not a styling detail - it means everything
+ * below it on screen is fiction - so it gets the loudest thing on the panel.
+ */
+.alarm {
+  margin: 12px; padding: 12px 14px; border-radius: 8px;
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+  color: var(--warn); font-size: 12px; line-height: 1.5;
+}
+.alarm strong { display: block; margin-bottom: 4px; font-size: 13px; }
+.alarm p { margin: 0 0 6px; color: var(--text); }
+.alarm ul { margin: 0 0 8px; padding-left: 16px; color: var(--muted); }
+.alarm button {
+  width: 100%; padding: 6px; border-radius: 6px; cursor: pointer;
+  background: transparent; color: var(--warn);
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+}
+.alarm button:hover { background: color-mix(in srgb, var(--warn) 18%, transparent); }
+
+/* Folding happens on the model now, so the instruction has to be there too. */
+.stage3d.picking { cursor: crosshair; }
+/* Top of the stage, not the bottom: the chooser floats across the foot of the
+   workspace and would sit on top of it there. */
+.stage-hud {
+  position: absolute; left: 12px; top: 44px; z-index: 5;
+  font-size: 11px; color: var(--dim); pointer-events: none;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  padding: 3px 8px; border-radius: 6px;
+}
+
+.fold-chooser .chooser-measure {
+  display: flex; align-items: center; gap: 5px; white-space: nowrap;
+  padding: 0 6px; border-left: 1px solid var(--line);
+}
+.fold-chooser .chooser-measure em {
+  font-style: normal; font-size: 11px; color: var(--dim);
+}
+.fold-chooser .chooser-measure input {
+  width: 68px; text-align: right; font-variant-numeric: tabular-nums;
+}
+
+.fold-chooser .chooser-measure button.link {
+  padding: 3px 7px; font-size: 11px;
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--accent);
+}
+
+/* The cutting mat the tutorials are shot on: one centimetre squares, heavier
+   every five, a cross at each intersection, and the centimetres numbered. It is
+   drawn in paper coordinates, so a square is a real centimetre at any zoom. */
+.mat-bg { fill: #14261d; }
+.mat .cm1 { stroke: #2b4838; stroke-width: 0.5; }
+.mat .cm5 { stroke: #46705a; stroke-width: 0.9; }
+.mat .cross { stroke: #3d6350; stroke-width: 0.7; fill: none; }
+.mat-numbers text {
+  fill: #7ea893; font-size: 9px; font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* A number that can be dragged as well as typed. */
+input.scrub {
+  cursor: ew-resize; text-align: right; font-variant-numeric: tabular-nums;
+  width: 64px; user-select: none;
+}
+input.scrub.typing { cursor: text; user-select: text; border-color: var(--accent); }
+input.scrub:hover { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+
+/* Right-click menu: opens where the pointer already is. */
+.context-menu {
+  position: fixed; z-index: 60; min-width: 190px;
+  display: flex; flex-direction: column; gap: 1px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 5px;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.5);
+}
+.context-menu button {
+  text-align: left; border: none; background: transparent;
+  padding: 6px 9px; border-radius: 5px; font-size: 12px;
+}
+.context-menu button:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.context-menu button.danger { color: #ff8a8a; }
+.context-menu button.danger:hover { background: rgb(255 138 138 / 0.16); }
+.context-menu hr { border: none; border-top: 1px solid var(--line); margin: 3px 0; }
+
+/* The step list works like a layers panel: shift for a run, cmd to pick out. */
+.history li.marked {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.history li.hovered { outline: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+.history-bulk {
+  display: flex; align-items: center; gap: 6px; padding: 6px 0 8px;
+  font-size: 11px; color: var(--dim);
+}
+.history-bulk button { padding: 4px 8px; font-size: 11px; }
+.history-bulk button.danger {
+  color: #ff8a8a; border-color: rgb(255 138 138 / 0.4);
+}
+
+/* Standard views, where a CAD program keeps its view cube. */
+.view-cube {
+  position: absolute; right: 12px; top: 44px; z-index: 5;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.view-cube button {
+  padding: 4px 9px; font-size: 11px; min-width: 70px;
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+}
+
+/*
+ * The quick bar: a single floating control, over the model rather than under
+ * it. The model keeps the whole panel, and the tools sit where the hand
+ * already is - which is what makes a drawing program feel like one.
+ */
+.stage.solid { display: flex; flex-direction: column; position: relative; }
+.stage3d { flex: 1; min-height: 0; }
+
+.workbar {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+  z-index: 20; max-width: calc(100% - 24px);
+  display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;
+  padding: 6px 8px; border-radius: 13px;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.5), 0 1px 0 rgb(255 255 255 / 0.04) inset;
+}
+.workbar-group { display: flex; align-items: center; gap: 3px; }
+.workbar-label {
+  font-size: 10px; color: var(--dim); margin: 0 3px 0 1px; white-space: nowrap;
+}
+.workbar button {
+  padding: 5px 9px; font-size: 11px; white-space: nowrap;
+  border-color: transparent; background: transparent; border-radius: 8px;
+}
+.workbar button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+.workbar button.on {
+  background: var(--accent); border-color: var(--accent); color: #07121f;
+}
+.workbar button.on:hover { background: var(--accent); }
+.workbar button:disabled { opacity: 0.32; }
+.workbar button.icon { padding: 5px 8px; font-size: 13px; line-height: 1; }
+
+/* Tools read glyph-first, the way a tool palette does. */
+.workbar .tools button { display: flex; align-items: center; gap: 5px; }
+.workbar .tools b { font-weight: 400; font-size: 13px; line-height: 1; opacity: 0.8; }
+.workbar .tools button.on b { opacity: 1; }
+
+.workbar .grid-toggle { display: flex; gap: 2px; }
+.workbar input.scrub {
+  width: 48px; padding: 4px 6px; border-radius: 7px; font-size: 11px;
+}
+.workbar-check {
+  display: flex; align-items: center; gap: 5px; align-self: stretch;
+  font-size: 11px; line-height: 1; color: var(--text); white-space: nowrap; padding: 0 3px 0 2px;
+  margin: 0;
+}
+/* The box's own margins, and every label's margin under it, put this one above the buttons beside it. */
+.workbar-check input { margin: 0; vertical-align: middle; }
+.workbar-sep {
+  width: 1px; height: 18px; flex: none;
+  background: color-mix(in srgb, var(--line) 90%, transparent);
+  margin: 0 1px;
+}
+
+/* The chooser stacks above the quick bar rather than on top of it. */
+.fold-chooser { bottom: 70px; }
+
+
+.macro h3 { margin: 0 0 4px; font-size: 12px; color: var(--text); }
+.macro-pair { display: flex; gap: 8px; }
+.macro-pair .macro-input { flex: 1; }
+
+/* Dimension lengths: HTML over the canvas, so they stay upright and legible. */
+.dim-labels { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+.dim-tag {
+  position: absolute; transform: translate(-50%, -50%);
+  padding: 1px 6px; border-radius: 5px; white-space: nowrap;
+  font-size: 11px; font-variant-numeric: tabular-nums;
+  color: #ffffff; background: #0f7a57;
+  box-shadow: 0 1px 6px rgb(0 0 0 / 0.4);
+}
+
+.dim-tag.live { color: #ffffff; background: #1d6fd4; }
+
+/* The shelf of saved planes: a name to save under, and the list to open from. */
+.plane-save { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; }
+.plane-save input {
+  background: var(--panel-2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 7px;
+  padding: 7px 9px; font-size: 12px; font-family: inherit; width: 100%;
+}
+.plane-save input:focus { outline: none; border-color: var(--accent); }
+.plane-save input::placeholder { color: var(--dim); }
+
+.plane-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; }
+.plane-list li { display: grid; grid-template-columns: 1fr auto; gap: 4px; }
+/* The whole row opens it, so the target is the row and not a word in it. */
+.plane-open {
+  display: grid; gap: 2px; text-align: left; padding: 7px 9px; width: 100%;
+}
+.plane-name { font-size: 12px; font-weight: 600; }
+.plane-meta { font-size: 10px; color: var(--dim); }
+.plane-drop { align-self: stretch; padding: 7px 9px; color: var(--dim); }
+.plane-drop:hover:not(:disabled) { color: var(--warn); border-color: currentColor; }
+/* Asked once and then asked again, in the same place, in the colour of a warning. */
+.plane-list li.dropping .plane-drop {
+  color: var(--warn); border-color: currentColor; font-size: 11px;
+}
+
+/*
+ * What a shortcut just did, and the way back. Sits over the model, above the
+ * work bar, and leaves on its own.
+ */
+.notice {
+  position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%);
+  z-index: 5; display: flex; align-items: center; gap: 10px;
+  background: var(--panel-2); color: var(--ink);
+  border: 1px solid var(--accent); border-radius: 9px;
+  padding: 8px 8px 8px 14px; font-size: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  animation: notice-in 160ms ease-out;
+  max-width: calc(100% - 32px);
+}
+.notice span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.notice button { padding: 5px 10px; font-size: 12px; }
+.notice .notice-close { padding: 5px 8px; color: var(--dim); border-color: transparent; }
+@keyframes notice-in {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* A heading inside a section, quieter than the section's own. */
+.panel h3.sub {
+  font-size: 11px; font-weight: 600; color: var(--dim);
+  margin: 16px 0 0; letter-spacing: 0.02em;
+}
+.plane-list.book li { grid-template-columns: 1fr; }
+
+/*
+ * Choosing how a collapse goes: the ways that fold, as buttons. Same place as
+ * the alarms, in the accent colour, because it is a question and not a fault.
+ */
+
+/* The typed distance: a plain box, since the number is typed, not dragged. */
+.measure-bar .chooser-measure input {
+  background: var(--panel); color: var(--ink);
+  border: 1px solid var(--accent); border-radius: 6px;
+  padding: 4px 7px; font-size: 13px; font-family: inherit;
+}
+.measure-bar .chooser-measure input:focus { outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+.measure-bar em.dim { font-style: normal; font-size: 11px; color: var(--dim); white-space: nowrap; }
+
+
+/* The list screen: choosing which aeroplane to fold. */
+.list-screen {
+  flex: 1; overflow-y: auto; padding: 24px clamp(16px, 4vw, 48px) 48px;
+  display: flex; flex-direction: column; gap: 28px;
+}
+.list-section h2 { font-size: 17px; margin: 0 0 6px; }
+.list-hint { color: var(--dim); font-size: 13px; margin: 0 0 14px; }
+.list-cards {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+.list-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 16px; display: flex; flex-direction: column; gap: 8px;
+}
+.list-card-title { font-size: 17px; font-weight: 650; }
+.list-card-note { font-size: 12px; color: var(--dim); flex: 1; }
+.list-card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.list-card-actions button, .tutorial-actions button {
+  font-size: 14px; padding: 8px 14px; border-radius: 8px;
+}
+.list-card-actions button.primary, .tutorial-actions button.primary {
+  background: var(--accent); color: #07121f; border-color: var(--accent); font-weight: 650;
+}
+.list-card-actions button.danger { border-color: var(--warn); color: var(--warn); }
+.topbar { align-items: center; }
+.topbar-back { font-size: 13px; padding: 6px 12px; }
+
+/* The walk-through: no tool rail, and the step in words across the top. */
+.layout.tutorial { grid-template-columns: minmax(0, 1fr) 300px; }
+.tutorial-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
+  padding: 10px 14px; margin: 0 0 8px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+}
+.tutorial-count {
+  font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); font-size: 15px;
+}
+.tutorial-step { font-size: 17px; font-weight: 600; flex: 1; min-width: 200px; }
+.tutorial-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* What the model's lines mean, in the corner of the stage. */
+.line-legend {
+  position: absolute; left: 12px; bottom: 12px; z-index: 3;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px;
+  display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink);
+  pointer-events: auto;
+}
+.line-legend div { display: flex; align-items: center; gap: 6px; }
+
+/* Flying the aeroplane: choices on the left, what they predict on the right. */
+.flight-overlay {
+  position: absolute; inset: 0; z-index: 30;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px 16px; background: var(--bg); overflow: hidden;
+}
+.flight-body { flex: 1; min-height: 0; display: flex; gap: 16px; }
+.flight-inputs {
+  width: 300px; flex: none; overflow-y: auto; padding-right: 6px;
+}
+.flight-results { flex: 1; min-width: 0; overflow-y: auto; }
+.flight-throws { min-width: 0; }
+.flight-body h3 { font-size: 13px; margin: 14px 0 6px; color: var(--ink); }
+.flight-body h3:first-child { margin-top: 0; }
+.flight-body h4 { font-size: 12px; margin: 0 0 4px; font-weight: 600; color: var(--ink); }
+.flight-choices { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+.flight-choices button { padding: 5px 10px; font-size: 12px; }
+.flight-inputs input[type='range'] { width: 100%; }
+.flight-value { margin: 2px 0 0; font-size: 12px; color: var(--dim); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.flight-hint { margin: 4px 0; font-size: 12px; color: var(--dim); }
+.flight-recommend { margin: 8px 0; padding: 8px 10px; border: 1px solid var(--accent); border-radius: 8px; }
+.flight-recommend p { margin: 0 0 4px; font-size: 12px; }
+.flight-recommend-use { width: 100%; padding: 8px 10px; font-size: 13px; font-weight: 600; }
+.flight-chart { width: 100%; max-height: 260px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.flight-chart .grid { stroke: var(--line); stroke-width: 1; }
+.flight-chart .ground { stroke: var(--good); stroke-width: 2; }
+.flight-chart .thrower { fill: none; stroke: var(--ink); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.flight-chart .thrower circle { fill: var(--ink); stroke: none; }
+.flight-chart .path { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
+.flight-chart .landing path { fill: var(--ink); }
+.flight-chart .landing .landing-fold { fill: none; stroke: var(--panel); stroke-width: 1; }
+.flight-chart text { fill: var(--dim); font-size: 10px; }
+.flight-big { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+.flight-big div {
+  flex: 1 1 110px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column;
+}
+.flight-big b { font-size: 22px; color: var(--ink); }
+.flight-big span { font-size: 12px; color: var(--dim); }
+.flight-kind {
+  display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel)); font-size: 13px;
+}
+.flight-kind span { color: var(--dim); font-size: 12px; }
+.flight-facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; font-size: 12px; }
+.flight-facts dt { color: var(--dim); }
+.flight-facts dd { margin: 0; color: var(--ink); }
+.flight-stability { display: flex; flex-direction: column; gap: 10px; }
+.flight-meter { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--dim); }
+.flight-meter .bar { height: 8px; border-radius: 4px; background: var(--panel-2); overflow: hidden; }
+.flight-meter .bar span { display: block; height: 100%; border-radius: 4px; background: var(--good); }
+.flight-meter.warn .bar span { background: var(--warn); }
+.flight-meter.bad .bar span { background: #ff6b6b; }
+.flight-note { margin: 16px 0 4px; font-size: 11px; color: var(--dim); }
+@media (max-width: 760px) {
+  .flight-body { flex-direction: column; overflow-y: auto; }
+  .flight-inputs { width: auto; overflow: visible; }
+  .flight-results { overflow: visible; }
+}
+.flight-value button.link {
+  padding: 2px 8px; font-size: 11px; background: none; color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.flight-big div.lead { flex: 2 1 200px; border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.flight-big div.lead b { font-size: 28px; color: var(--accent); }
+.flight-cg { width: 70px; }
+
+/* The screens of one aeroplane, as a menu in the top bar. */
+.view-menu {
+  display: flex; gap: 2px; margin-left: 18px; padding: 3px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px;
+}
+.view-menu button {
+  border: none; background: none; padding: 6px 14px; font-size: 13px; border-radius: 6px;
+}
+.view-menu button.on { background: var(--accent); color: #06121f; font-weight: 650; }
+.view-menu button:hover:not(:disabled):not(.on) { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.saved-note { color: var(--good); }
+
+/* Downloading the aeroplane's pages, next to the screen menu. */
+.download-menu { position: relative; margin-left: 10px; }
+.download-menu > button { padding: 7px 14px; font-size: 13px; }
+.download-pop {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; min-width: 230px;
+  display: flex; flex-direction: column; gap: 4px; padding: 6px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+.download-pop button {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  text-align: left; padding: 8px 10px; border: none; background: none; font-size: 13px;
+}
+.download-pop button:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.download-pop button span { font-size: 11px; color: var(--dim); }
+
+/* The pattern a step at a time. */
+.pattern-steps {
+  position: absolute; top: 46px; left: 10px; z-index: 5;
+  display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  max-width: calc(100% - 24px);
+}
+.pattern-steps button { padding: 5px 11px; font-size: 12px; }
+.pattern-step-label { font-size: 13px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; }
+.pattern-step-label b { color: #f59e0b; margin-right: 6px; }
+.topbar-save { margin-left: 10px; padding: 6px 14px; font-size: 13px; font-weight: 650;
+  background: color-mix(in srgb, var(--good) 22%, var(--panel-2)); border-color: color-mix(in srgb, var(--good) 55%, var(--line)); }
+.autosaved { margin-left: 8px; font-size: 12px; color: var(--good); }
+
+/* Panel sections that are set once and folded away until wanted. */
+.panel-fold { border-bottom: 1px solid var(--line); }
+.panel-fold > summary {
+  display: flex; align-items: baseline; gap: 8px; padding: 12px 16px; cursor: pointer; list-style: none;
+}
+.panel-fold > summary::-webkit-details-marker { display: none; }
+.panel-fold > summary::before { content: '▸'; color: var(--dim); font-size: 11px; }
+.panel-fold[open] > summary::before { content: '▾'; }
+.panel-fold > summary h2 { margin: 0; }
+.panel-fold > summary span { margin-left: auto; font-size: 11px; color: var(--dim); }
+.panel-fold > label, .panel-fold > p, .panel-fold > section { margin-left: 0; }
+.panel-fold:not(:has(section)) { padding-bottom: 0; }
+.panel-fold[open]:not(:has(section)) { padding: 0 16px 12px; }
+.panel-fold[open]:not(:has(section)) > summary { margin: 0 -16px; }
+.plane-name { width: 100%; }
+.flight-grades { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.flight-grades .grade { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 12px; }
+.flight-grades .grade-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.flight-grades .grade-head b { font-size: 13px; color: var(--ink); }
+.flight-grades .grade-head span { font-size: 16px; font-weight: 700; }
+.flight-grades .grade.good .grade-head span { color: var(--good); }
+.flight-grades .grade.warn .grade-head span { color: var(--warn); }
+.flight-grades .grade.bad .grade-head span { color: #ff6b6b; }
+.flight-grades .bar { height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
+.flight-grades .bar span { display: block; height: 100%; background: var(--good); }
+.flight-grades .grade.warn .bar span { background: var(--warn); }
+.flight-grades .grade.bad .bar span { background: #ff6b6b; }
+.flight-grades p { margin: 6px 0 0; color: var(--ink); }
+.flight-grades .grade-hint { color: var(--dim); font-size: 11px; }
+
+/*
+ * A screen's own menu, the second level under the top bar: the same row in
+ * the same place on every screen, its controls in labelled groups.
+ */
+.subbar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px;
+  padding: 6px 0 8px; border-bottom: 1px solid var(--line); margin-bottom: 6px;
+}
+.subbar-title { font-size: 13px; font-weight: 700; color: var(--ink); margin-right: 4px; }
+.subbar-group { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.subbar-group em {
+  font-style: normal; font-size: 11px; color: var(--dim); margin-right: 2px;
+  padding-left: 12px; border-left: 1px solid var(--line);
+}
+.subbar-group button { padding: 4px 10px; font-size: 12px; }
+.subbar .pattern-step-label { font-size: 12px; color: var(--ink); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dieline-overlay .subbar { padding: 8px 14px; margin: 0; }
+
+/* Many throws: the typical one drawn, the rest faint behind it. */
+.flight-chart .path.faint { stroke-width: 1; opacity: 0.18; }
+.flight-hint .computing { color: var(--accent); font-weight: 600; }
+.flight-kind span + span { margin-top: 2px; }
+
+/* The wind tunnel. */
+.tunnel { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px 16px; align-items: start; }
+.tunnel-controls { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: end; }
+.tunnel-controls label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--dim); min-width: 220px; flex: 1 1 220px; }
+.tunnel-controls label b { color: var(--ink); font-size: 14px; }
+.tunnel-controls .link { padding: 4px 10px; font-size: 12px; background: none; color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
+.tunnel-view, .tunnel-front { width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.tunnel-view .air { fill: none; stroke: color-mix(in srgb, var(--accent) 45%, transparent); stroke-width: 1.2; stroke-dasharray: 6 5; }
+.tunnel-view .air-tip { fill: color-mix(in srgb, var(--accent) 60%, transparent); }
+.tunnel-view .ply, .tunnel-front .ply { fill: color-mix(in srgb, var(--paper) 55%, transparent); stroke: var(--paper); stroke-width: 0.8; stroke-linejoin: round; }
+.tunnel-view .ply.edge { fill: color-mix(in srgb, var(--paper) 85%, transparent); }
+.tunnel-view .force { stroke-width: 3; fill: none; }
+.tunnel-view .force.lift { stroke: var(--good); }
+.tunnel-view .force.weight { stroke: #ff6b6b; }
+.tunnel-view .force.drag { stroke: var(--warn); }
+.tunnel-view .force.pitch { stroke: #c792ea; stroke-width: 2.5; }
+.tunnel-view .tip-lift { fill: var(--good); }
+.tunnel-view .tip-weight { fill: #ff6b6b; }
+.tunnel-view .tip-drag { fill: var(--warn); }
+.tunnel-view .tip-pitch { fill: #c792ea; }
+.tunnel-view .force-label { font-size: 12px; font-weight: 600; }
+.tunnel-view .force-label.lift { fill: var(--good); }
+.tunnel-view .force-label.weight { fill: #ff6b6b; }
+.tunnel-view .force-label.drag { fill: var(--warn); }
+.tunnel-view .cg { fill: var(--ink); }
+.tunnel .tunnel-note { fill: var(--dim); font-size: 11px; }
+/* Beside the model rather than under it: the screen is wide, the model gets the height. */
+.tunnel-facts { grid-column: 2; display: grid; grid-template-columns: max-content 1fr; gap: 8px 14px; margin: 0; font-size: 13px;
+  align-content: start; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.tunnel-facts dt { color: var(--dim); }
+.tunnel-facts dd { margin: 0; color: var(--ink); }
+@media (max-width: 760px) {
+  .tunnel { grid-template-columns: 1fr; }
+  .tunnel-facts { grid-column: 1; }
+}
+.tunnel-view { max-height: 340px; }
+.tunnel-front { max-height: 160px; }
+
+/* The wind tunnel in 3D. */
+.tunnel3d { display: flex; flex-direction: column; gap: 6px; }
+.tunnel3d-stage {
+  /* As tall as the window leaves room for, under the bars and the controls. */
+  position: relative; height: max(360px, calc(100vh - 300px)); border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 40%, #16202e, var(--panel) 70%);
+}
+.tunnel3d-stage canvas { width: 100%; height: 100%; display: block; }
+.tunnel3d-labels span {
+  position: absolute; transform: translate(8px, -50%); font-size: 12px; font-weight: 650;
+  pointer-events: none; white-space: nowrap; text-shadow: 0 1px 3px #000;
+}
+.tunnel3d-labels .lift { color: #4ade80; }
+.tunnel3d-labels .drag { color: #fbbf24; }
+.tunnel3d-labels .weight { color: #f87171; }
+.tunnel3d-note { position: absolute; left: 10px; top: 8px; font-size: 11px; color: var(--dim); }
+.tunnel3d-pitch { position: absolute; right: 10px; top: 8px; font-size: 12px; font-weight: 650; }
+.tunnel3d-pitch.up { color: #c084fc; }
+.tunnel3d-pitch.down { color: #38bdf8; }
+@media (max-width: 760px) { .tunnel3d-stage { height: 260px; } }
+.subbar .recompute.on { background: var(--accent); color: #06121f; font-weight: 650; }
+.flight-hint .stale { color: var(--warn); font-weight: 600; }
+.list-card.has-mine { border-color: color-mix(in srgb, var(--good) 50%, var(--line)); }
+/* Finished or still on the bench: the same badge on the list and in the top bar. */
+.plane-status { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 650; vertical-align: middle; }
+.plane-status.done { background: color-mix(in srgb, var(--good) 20%, transparent); color: var(--good); }
+.plane-status.wip { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+.topbar-mode { margin-left: 8px; padding: 6px 12px; font-size: 13px; font-weight: 650; }
+.flight-elevator { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 4px 0 6px; font-size: 12px; color: var(--dim); }
+.flight-elevator label { display: flex; align-items: center; gap: 4px; }
+.flight-elevator input { width: 56px; }
+.fold-chooser .chooser-plies { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; }
+.fold-chooser .chooser-plies button { padding: 4px 10px; }
+/* Asked in a popup beside the panel, next to the button that opened it. */
+.macro-pop {
+  position: fixed; left: 276px; z-index: 60; width: 300px; padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line)); border-radius: 10px;
+  background: var(--panel-2); box-shadow: 0 12px 36px rgb(0 0 0 / 0.55);
+}
+.macro-actions { display: flex; gap: 6px; margin-top: 8px; }
+.macro-actions .primary { flex: 1; }
+
+/* A plane's card: the finished shape on top, then name, badge and how it flies. */
+.list-card-picture {
+  height: 130px; margin: 0 -4px 2px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 50% 45%, #1d2735, var(--panel-2) 75%); color: var(--dim); font-size: 12px;
+}
+.list-card-picture svg { width: 100%; height: 100%; }
+.list-card-flight { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.list-card-flight .dim { color: var(--dim); font-size: 11px; }
+.list-card-flight b { color: var(--accent); }
+.list-card-grades { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.list-card-grades span { font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--panel-2); }
+.list-card-grades .good { color: var(--good); }
+.list-card-grades .warn { color: var(--warn); }
+.list-card-grades .bad { color: #ff6b6b; }
+/* The name and its badge, then the picture, the paper, how it flies, the rest. */
+.list-card-title { order: 0; }
+.list-card-picture { order: 1; }
+.list-card-paper { order: 1; font-size: 12px; color: var(--dim); }
+.list-card-flight { order: 2; }
+.list-card-note { order: 3; }
+.list-card-actions { order: 4; }
+.list-card-stars { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.star-row { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.star-row em { font-style: normal; color: var(--dim); width: 54px; }
+.star-row small { color: var(--ink); font-size: 11px; }
+.stars span { font-size: 13px; letter-spacing: 1px; }
+.stars .full { color: #fbbf24; }
+.stars .half { background: linear-gradient(90deg, #fbbf24 50%, #3b4556 50%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.stars .empty { color: #3b4556; }
+.list-card-new { display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: 8px; min-height: 160px; border-style: dashed; }
+.list-card-new .primary { font-size: 15px; padding: 14px; }
+.pentagon { width: 100%; max-width: 230px; display: block; margin: 2px auto 0; overflow: visible; }
+.pentagon .ring { fill: none; stroke: var(--line); stroke-width: 0.6; }
+.pentagon .spoke { stroke: var(--line); stroke-width: 0.6; }
+.pentagon .fill { fill: color-mix(in srgb, var(--accent) 35%, transparent); stroke: var(--accent); stroke-width: 1.2; }
+.pentagon text { font-size: 7.5px; fill: var(--dim); }
+/* Wide cards: the plane on the left, its pentagon of ratings on the right. */
+.list-screen .list-cards { grid-template-columns: repeat(auto-fill, minmax(560px, 1fr)); }
+/*
+ * Laid out from the top, with the pentagon's room kept from the start. Centred,
+ * the buttons moved down when the scores came in - between the press and the
+ * release of a click, so the click never happened and only the second one did.
+ */
+.list-card-top { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.2fr); gap: 10px; align-items: start; }
+.list-card-top .list-card-flight { display: flex; flex-direction: column; align-items: stretch; justify-content: center; min-height: 210px; }
+.list-card-top .pentagon { max-width: none; width: 100%; }
+.list-card-top .pentagon text { font-size: 10px; fill: var(--ink); }
+.list-card-top .pentagon .fill { stroke-width: 1.6; }
+@media (max-width: 520px) {
+  .list-screen .list-cards { grid-template-columns: 1fr; }
+  .list-card-top { grid-template-columns: 1fr; }
+}
+.list-card-scores { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--dim); margin: -2px 0 6px; }
+.list-card-scores div { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.list-card-scores b { color: var(--ink); font-size: 13px; }
+.pentagon text .score { font-weight: 700; fill: var(--accent); font-size: 11px; }
+.list-card-left { display: flex; flex-direction: column; gap: 6px; justify-content: flex-start; }
+.list-card-left .list-card-title { margin: 2px 0 0; }
+.list-card-left .list-card-actions { margin-top: 0; }
+.list-card-paper { min-height: 1.2em; }
+
+/* The align tool's question, popped up over its button. */
+.tool-slot { position: relative; display: inline-flex; }
+.tool-pop {
+  position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; gap: 6px; padding: 10px; min-width: 150px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line)); border-radius: 10px;
+  background: var(--panel-2); box-shadow: 0 12px 36px rgb(0 0 0 / 0.55); z-index: 30;
+}
+.tool-pop p { margin: 0 0 2px; font-size: 12px; color: var(--text); white-space: nowrap; }
+.workbar .tool-pop button { border-color: var(--line); padding: 7px 10px; font-size: 12px; text-align: left; }
+
+/* The pocket question: each way to squash it, shown as it would come out. */
+.pocket-chooser {
+  position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 40;
+  display: flex; flex-direction: column; gap: 10px; padding: 14px; max-width: min(720px, calc(100% - 32px));
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line)); border-radius: 12px;
+  background: var(--panel-2); box-shadow: 0 14px 40px rgb(0 0 0 / 0.55);
+}
+.pocket-title { margin: 0; font-size: 14px; font-weight: 650; }
+.pocket-options { display: flex; gap: 10px; flex-wrap: wrap; }
+.pocket-option { display: flex; flex-direction: column; gap: 4px; width: 200px; padding: 8px; text-align: left; }
+.pocket-option small { color: var(--dim); font-size: 11px; line-height: 1.35; }
+.pocket-preview { width: 100%; height: 130px; background: #1b2330; border-radius: 6px; }
+.chooser-plies em { font-style: normal; font-size: 11px; color: var(--dim); margin: 0 4px; }
+
+.pocket-note { margin: 0; font-size: 12px; color: var(--dim); }
+.pocket-picking { bottom: auto; top: 90px; }

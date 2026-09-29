@@ -1,0 +1,383 @@
+{
+ "kind": "paper-plane-session",
+ "version": 1,
+ "sheet": {
+  "widthMm": 210,
+  "heightMm": 297
+ },
+ "gsm": 90,
+ "steps": [
+  {
+   "kind": "fold",
+   "a": [
+    0.105,
+    0
+   ],
+   "b": [
+    0.105,
+    0.297
+   ],
+   "movingSide": [
+    0.21,
+    0.1485
+   ],
+   "sense": "valley",
+   "creaseOnly": true,
+   "label": "① 반으로 접었다 펴기"
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.105,
+    0
+   ],
+   "b": [
+    0.21,
+    0.105
+   ],
+   "movingSide": [
+    0.21,
+    0
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "② 한쪽 귀를 중심선에"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.105,
+    0
+   ],
+   "b": [
+    0,
+    0.105
+   ],
+   "movingSide": [
+    0,
+    0
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "② 반대쪽 귀를 중심선에"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0.11499999999999999
+   ],
+   "b": [
+    0.21,
+    0.11499999999999999
+   ],
+   "movingSide": [
+    0.105,
+    0
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "③ 1cm 지점을 잇는 선대로 접기"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.105,
+    0.11499999999999999
+   ],
+   "b": [
+    0,
+    0.21999999999999997
+   ],
+   "movingSide": [
+    0,
+    0.11499999999999999
+   ],
+   "sense": "valley",
+   "creaseOnly": true,
+   "label": "④ 가운데 선에 맞춰 접었다 펴기"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.105,
+    0.11499999999999999
+   ],
+   "b": [
+    0.21,
+    0.21999999999999997
+   ],
+   "movingSide": [
+    0.21,
+    0.11499999999999999
+   ],
+   "sense": "valley",
+   "creaseOnly": true,
+   "label": "④ 반대쪽도 접었다 펴기"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0.21999999999999997
+   ],
+   "b": [
+    0.04349242404917498,
+    0.11499999999999999
+   ],
+   "movingSide": [
+    0,
+    0.11499999999999999
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑤ ④의 선에 맞춰 접기"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.21,
+    0.21999999999999997
+   ],
+   "b": [
+    0.16650757595082502,
+    0.11499999999999999
+   ],
+   "movingSide": [
+    0.21,
+    0.11499999999999999
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑤ 반대쪽도"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.105,
+    0.11499999999999999
+   ],
+   "b": [
+    0,
+    0.21999999999999997
+   ],
+   "movingSide": [
+    0.002,
+    0.12
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑥ ④의 선대로 접기"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.105,
+    0.11499999999999999
+   ],
+   "b": [
+    0.21,
+    0.21999999999999997
+   ],
+   "movingSide": [
+    0.208,
+    0.12
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑥ 반대쪽도"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0.192175144212722
+   ],
+   "b": [
+    0.21,
+    0.192175144212722
+   ],
+   "movingSide": [
+    0.105,
+    0.22599999999999998
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑦ 두 점을 잇는 선대로 접어 잠그기",
+   "plies": {
+    "kind": "piece",
+    "at": [
+     0.103,
+     0.22399999999999998
+    ]
+   }
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0.134675144212722
+   ],
+   "b": [
+    0.21,
+    0.134675144212722
+   ],
+   "movingSide": [
+    0.105,
+    0.118
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑧ 두 점이 만나도록 접기"
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.105,
+    0
+   ],
+   "b": [
+    0.105,
+    0.297
+   ],
+   "movingSide": [
+    0.21,
+    0.1485
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑨ 뒤로 반 접기"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.09,
+    0
+   ],
+   "b": [
+    0.09,
+    0.297
+   ],
+   "movingSide": [
+    0.045,
+    0.27699999999999997
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑩ 날개 접기 (1.5cm)",
+   "angleDeg": 90,
+   "plies": {
+    "kind": "half"
+   }
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.09,
+    0
+   ],
+   "b": [
+    0.09,
+    0.297
+   ],
+   "movingSide": [
+    0.135,
+    0.27699999999999997
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑪ 반대쪽 날개도 똑같이",
+   "angleDeg": 90,
+   "plies": {
+    "kind": "half"
+   }
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.08000000000000014,
+    0
+   ],
+   "b": [
+    0.08000000000000014,
+    0.297
+   ],
+   "movingSide": [
+    0.09000000000000014,
+    0.27699999999999997
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑫ 윙릿 접기 (1cm)",
+   "angleDeg": 90,
+   "plies": {
+    "kind": "piece",
+    "at": [
+     0.08600000000000013,
+     0.27699999999999997
+    ]
+   }
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.01,
+    0
+   ],
+   "b": [
+    0.01,
+    0.297
+   ],
+   "movingSide": [
+    0,
+    0.27699999999999997
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑫ 반대쪽 윙릿도",
+   "angleDeg": 90,
+   "plies": {
+    "kind": "piece",
+    "at": [
+     0.004,
+     0.27699999999999997
+    ]
+   }
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  }
+ ],
+ "saved": "2026-09-26T15:29:52.976Z",
+ "name": "이지로크 스카이킹",
+ "elevator": {
+  "fromCm": 1,
+  "widthCm": 2,
+  "depthCm": 0.5,
+  "angleDeg": 12,
+  "auto": true
+ },
+ "vee": 20,
+ "throwAngle": 70
+}

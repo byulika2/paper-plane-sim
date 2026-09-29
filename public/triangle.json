@@ -1,0 +1,386 @@
+{
+ "kind": "paper-plane-session",
+ "version": 1,
+ "sheet": {
+  "widthMm": 210,
+  "heightMm": 297
+ },
+ "gsm": 90,
+ "steps": [
+  {
+   "kind": "fold",
+   "a": [
+    0.105,
+    0
+   ],
+   "b": [
+    0.105,
+    0.297
+   ],
+   "movingSide": [
+    0.21,
+    0.1485
+   ],
+   "sense": "valley",
+   "creaseOnly": true,
+   "label": "① 반으로 접었다 펴기"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.105,
+    0
+   ],
+   "b": [
+    0.21,
+    0.105
+   ],
+   "movingSide": [
+    0.21,
+    0
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "② 한쪽 귀를 중심선에"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.105,
+    0
+   ],
+   "b": [
+    0,
+    0.105
+   ],
+   "movingSide": [
+    0,
+    0
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "② 반대쪽 귀를 중심선에"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.105,
+    0
+   ],
+   "b": [
+    0.21,
+    0.25349242404917494
+   ],
+   "movingSide": [
+    0.21,
+    0
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "③ 한쪽을 중심선에 한 번 더"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.105,
+    0
+   ],
+   "b": [
+    0,
+    0.25349242404917494
+   ],
+   "movingSide": [
+    0,
+    0
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "③ 반대쪽을 중심선에 한 번 더"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0.043492424049174985
+   ],
+   "b": [
+    0.21,
+    0.253492424049175
+   ],
+   "movingSide": [
+    0,
+    0.297
+   ],
+   "sense": "valley",
+   "creaseOnly": true,
+   "label": "④ 선대로 접었다 펴기"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.21,
+    0.043492424049174985
+   ],
+   "b": [
+    0,
+    0.253492424049175
+   ],
+   "movingSide": [
+    0.21,
+    0.297
+   ],
+   "sense": "valley",
+   "creaseOnly": true,
+   "label": "⑤ 반대쪽도 선대로 접었다 펴기"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0.14849242404917498
+   ],
+   "b": [
+    0.21,
+    0.14849242404917498
+   ],
+   "movingSide": [
+    0.105,
+    0
+   ],
+   "sense": "valley",
+   "creaseOnly": true,
+   "label": "⑥ ⭕를 잇는 선 (자국)"
+  },
+  {
+   "kind": "collapse",
+   "at": [
+    0.105,
+    0.14849242404917498
+   ],
+   "open": [
+    [
+     0.105,
+     0.297
+    ]
+   ],
+   "label": "⑥ 양쪽 ⭕를 안쪽으로 밀어 넣으며"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0.19198484809834998
+   ],
+   "b": [
+    0.21,
+    0.19198484809834998
+   ],
+   "movingSide": [
+    0.105,
+    0.297
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑦ 두 점이 이어지게",
+   "plies": {
+    "kind": "piece",
+    "at": [
+     0.10099999999999999,
+     0.267
+    ]
+   }
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0.19198484809834998
+   ],
+   "b": [
+    0.21,
+    0.19198484809834998
+   ],
+   "movingSide": [
+    0.105,
+    0
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑧ 두 점이 이어지게 앞장만",
+   "plies": {
+    "kind": "piece",
+    "at": [
+     0.10099999999999999,
+     0.1802386360737625
+    ]
+   }
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0.12196969619669998
+   ],
+   "b": [
+    0.21,
+    0.12196969619669998
+   ],
+   "movingSide": [
+    0.105,
+    0.08696969619669997
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑨ 7cm 지점에 맞춰"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.105,
+    0
+   ],
+   "b": [
+    0.105,
+    0.297
+   ],
+   "movingSide": [
+    0.21,
+    0.1485
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑩ 반으로"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.09,
+    0
+   ],
+   "b": [
+    0.09,
+    0.297
+   ],
+   "movingSide": [
+    0.045,
+    0.27699999999999997
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑪ 날개 (1.5cm)",
+   "angleDeg": 90,
+   "plies": {
+    "kind": "half"
+   }
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.09,
+    0
+   ],
+   "b": [
+    0.09,
+    0.297
+   ],
+   "movingSide": [
+    0.135,
+    0.27699999999999997
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑫ 반대쪽 날개",
+   "angleDeg": 90,
+   "plies": {
+    "kind": "half"
+   }
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.07500000000000011,
+    0
+   ],
+   "b": [
+    0.07500000000000011,
+    0.297
+   ],
+   "movingSide": [
+    0.09000000000000011,
+    0.27699999999999997
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑬ 윙릿 1.5cm",
+   "angleDeg": 90,
+   "plies": {
+    "kind": "piece",
+    "at": [
+     0.0840000000000001,
+     0.27699999999999997
+    ]
+   }
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.015,
+    0
+   ],
+   "b": [
+    0.015,
+    0.297
+   ],
+   "movingSide": [
+    0,
+    0.27699999999999997
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑬ 윙릿 1.5cm (반대쪽)",
+   "angleDeg": 90,
+   "plies": {
+    "kind": "piece",
+    "at": [
+     0.006,
+     0.27699999999999997
+    ]
+   }
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  }
+ ],
+ "saved": "2026-09-26T15:29:52.785Z",
+ "name": "트라이앵글",
+ "elevator": {
+  "fromCm": 1,
+  "widthCm": 3,
+  "depthCm": 0.5,
+  "angleDeg": 30,
+  "auto": true
+ },
+ "vee": 30,
+ "throwAngle": 70
+}

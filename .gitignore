@@ -1,0 +1,14 @@
+# 설치·빌드 결과
+node_modules/
+dist/
+*.tsbuildinfo
+
+# 편집기·도구
+.idea/
+.vscode/
+.omc/
+.DS_Store
+
+# 로그
+*.log
+npm-debug.log*

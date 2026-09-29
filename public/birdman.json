@@ -1,0 +1,310 @@
+{
+ "kind": "paper-plane-session",
+ "version": 1,
+ "sheet": {
+  "widthMm": 210,
+  "heightMm": 297
+ },
+ "gsm": 90,
+ "steps": [
+  {
+   "kind": "fold",
+   "a": [
+    0.105,
+    0
+   ],
+   "b": [
+    0.105,
+    0.297
+   ],
+   "movingSide": [
+    0.21,
+    0.1485
+   ],
+   "sense": "valley",
+   "creaseOnly": true,
+   "label": "① 반으로 접었다 펴기"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0.1485
+   ],
+   "b": [
+    0.21,
+    0.1485
+   ],
+   "movingSide": [
+    0.105,
+    0
+   ],
+   "sense": "valley",
+   "creaseOnly": true,
+   "label": "② 반대로 반 접었다 펴기"
+  },
+  {
+   "kind": "dimension",
+   "a": [
+    0.105,
+    0.1485
+   ],
+   "b": [
+    0.105,
+    0.1305
+   ],
+   "label": "③ 1.8cm 지점에 표시"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0.06525
+   ],
+   "b": [
+    0.21,
+    0.06525
+   ],
+   "movingSide": [
+    0.105,
+    0.001
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "④ 앞끝을 ③의 1.8cm 표시에 맞춰 접기"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0.097875
+   ],
+   "b": [
+    0.21,
+    0.097875
+   ],
+   "movingSide": [
+    0.105,
+    0.06575
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑤ 접은 부분을 반으로 접기"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0.1305
+   ],
+   "b": [
+    0.21,
+    0.1305
+   ],
+   "movingSide": [
+    0.105,
+    0.098375
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑥ 선대로 접기"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0.1468125
+   ],
+   "b": [
+    0.21,
+    0.1468125
+   ],
+   "movingSide": [
+    0.105,
+    0.131
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑦ 접은 부분을 반으로 접기"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0.16312500000000002
+   ],
+   "b": [
+    0.21,
+    0.16312500000000002
+   ],
+   "movingSide": [
+    0.105,
+    0.1473125
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑧ 선대로 접기"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0.17943750000000003
+   ],
+   "b": [
+    0.21,
+    0.17943750000000003
+   ],
+   "movingSide": [
+    0.105,
+    0.16362500000000002
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑨ 선대로 한 번 더 접기"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.105,
+    0
+   ],
+   "b": [
+    0.105,
+    0.297
+   ],
+   "movingSide": [
+    0.21,
+    0.1485
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑩ 반으로 접기"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.09,
+    0.17943750000000003
+   ],
+   "b": [
+    0.097,
+    0.297
+   ],
+   "movingSide": [
+    0.04790457203615098,
+    0.27699999999999997
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑪ 날개 접기 (앞 1.5cm · 뒤 0.8cm)",
+   "angleDeg": 90,
+   "plies": {
+    "kind": "wing",
+    "upper": true
+   }
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.10331463300950097,
+    0.17943750000000003
+   ],
+   "b": [
+    0.09631463300950097,
+    0.297
+   ],
+   "movingSide": [
+    0.14541006097335,
+    0.27699999999999997
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑫ 반대쪽 날개도 똑같이",
+   "angleDeg": 90,
+   "plies": {
+    "kind": "wing",
+    "upper": true
+   }
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.058141818596588554,
+    -0.008225350176936708
+   ],
+   "b": [
+    0.09338528940027406,
+    0.28667615501710225
+   ],
+   "movingSide": [
+    0.09796253222951502,
+    0.2659868136046221
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑬ 윙릿 접기 (1cm)",
+   "angleDeg": 90,
+   "plies": {
+    "kind": "piece",
+    "at": [
+     0.09498372914674695,
+     0.2663428082592048
+    ]
+   }
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.045172814412912446,
+    -0.008225350176936708
+   ],
+   "b": [
+    0.00992934360922694,
+    0.28667615501710225
+   ],
+   "movingSide": [
+    0.005352100779985977,
+    0.2659868136046221
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑬ 반대쪽 윙릿도",
+   "angleDeg": 90,
+   "plies": {
+    "kind": "piece",
+    "at": [
+     0.00833090386275405,
+     0.2663428082592048
+    ]
+   }
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  }
+ ],
+ "saved": "2026-09-29T14:51:14.025Z",
+ "name": "버드맨",
+ "elevator": {
+  "fromCm": 1,
+  "widthCm": 2,
+  "depthCm": 0.5,
+  "angleDeg": 23,
+  "auto": true
+ },
+ "vee": 20,
+ "throwAngle": 70
+}

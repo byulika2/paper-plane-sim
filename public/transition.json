@@ -1,0 +1,365 @@
+{
+ "kind": "paper-plane-session",
+ "version": 1,
+ "sheet": {
+  "widthMm": 210,
+  "heightMm": 297
+ },
+ "gsm": 90,
+ "steps": [
+  {
+   "kind": "fold",
+   "a": [
+    0.105,
+    0
+   ],
+   "b": [
+    0.105,
+    0.297
+   ],
+   "movingSide": [
+    0.21,
+    0.1485
+   ],
+   "sense": "valley",
+   "creaseOnly": true,
+   "label": "① 반으로 접었다 펴기"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.21,
+    0
+   ],
+   "b": [
+    0,
+    0.21
+   ],
+   "movingSide": [
+    0,
+    0
+   ],
+   "sense": "valley",
+   "creaseOnly": true,
+   "label": "② 큰 삼각형 모양으로 접었다 펴기"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0
+   ],
+   "b": [
+    0.21,
+    0.21
+   ],
+   "movingSide": [
+    0.21,
+    0
+   ],
+   "sense": "valley",
+   "creaseOnly": true,
+   "label": "③ 반대쪽도 큰 삼각형으로 접었다 펴기"
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0.105
+   ],
+   "b": [
+    0.21,
+    0.105
+   ],
+   "movingSide": [
+    0.105,
+    0
+   ],
+   "sense": "valley",
+   "creaseOnly": true,
+   "label": "④ X자 가운데에 맞춰 접었다 펴기"
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  },
+  {
+   "kind": "collapse",
+   "at": [
+    0.105,
+    0.105
+   ],
+   "open": [
+    [
+     0.105,
+     0.297
+    ]
+   ],
+   "label": "⑤ 양쪽 ⭕를 안쪽으로 밀어 넣으며"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.105,
+    0.21
+   ],
+   "b": [
+    0.0525,
+    0.1575
+   ],
+   "movingSide": [
+    0.004,
+    0.206
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑥ 꼭짓점끼리 이어지게 앞장만",
+   "plies": {
+    "kind": "piece",
+    "at": [
+     0.008,
+     0.204
+    ]
+   }
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.105,
+    0.21
+   ],
+   "b": [
+    0.1575,
+    0.1575
+   ],
+   "movingSide": [
+    0.206,
+    0.206
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑥ 반대쪽도 앞장만",
+   "plies": {
+    "kind": "piece",
+    "at": [
+     0.20199999999999999,
+     0.204
+    ]
+   }
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0.1575
+   ],
+   "b": [
+    0.21,
+    0.1575
+   ],
+   "movingSide": [
+    0.105,
+    0.11499999999999999
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑦ 두 점이 만나도록"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0.1575
+   ],
+   "b": [
+    0.21,
+    0.1575
+   ],
+   "movingSide": [
+    0.105,
+    0.1675
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑧ 앞장의 작은 삼각형만 다시 펴기",
+   "plies": {
+    "kind": "piece",
+    "at": [
+     0.10289999999999999,
+     0.168
+    ]
+   }
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0,
+    0.1575
+   ],
+   "b": [
+    0.21,
+    0.1575
+   ],
+   "movingSide": [
+    0.105,
+    0.1475
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑨ 안쪽으로 접어 넣어 잠그기",
+   "plies": {
+    "kind": "piece",
+    "at": [
+     0.10289999999999999,
+     0.1375
+    ]
+   },
+   "tuck": true
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.105,
+    0
+   ],
+   "b": [
+    0.105,
+    0.297
+   ],
+   "movingSide": [
+    0.21,
+    0.1485
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑩ 반으로 접기"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.09,
+    0
+   ],
+   "b": [
+    0.09,
+    0.297
+   ],
+   "movingSide": [
+    0.045,
+    0.27699999999999997
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑪ 날개 접기 (1.5cm)",
+   "angleDeg": 90,
+   "plies": {
+    "kind": "half"
+   }
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.09,
+    0
+   ],
+   "b": [
+    0.09,
+    0.297
+   ],
+   "movingSide": [
+    0.135,
+    0.27699999999999997
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑫ 반대쪽 날개도 똑같이",
+   "angleDeg": 90,
+   "plies": {
+    "kind": "half"
+   }
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.07500000000000007,
+    0
+   ],
+   "b": [
+    0.07500000000000007,
+    0.297
+   ],
+   "movingSide": [
+    0.09000000000000007,
+    0.27699999999999997
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑬ 윙릿 접기 (1.5cm)",
+   "angleDeg": 90,
+   "plies": {
+    "kind": "piece",
+    "at": [
+     0.08400000000000006,
+     0.27699999999999997
+    ]
+   }
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  },
+  {
+   "kind": "fold",
+   "a": [
+    0.015,
+    0
+   ],
+   "b": [
+    0.015,
+    0.297
+   ],
+   "movingSide": [
+    0,
+    0.27699999999999997
+   ],
+   "sense": "valley",
+   "creaseOnly": false,
+   "label": "⑬ 반대쪽 윙릿도",
+   "angleDeg": 90,
+   "plies": {
+    "kind": "piece",
+    "at": [
+     0.006,
+     0.27699999999999997
+    ]
+   }
+  },
+  {
+   "kind": "flip",
+   "label": "뒤집어요"
+  }
+ ],
+ "saved": "2026-09-26T15:29:53.530Z",
+ "name": "트랜지션",
+ "vee": 20,
+ "elevator": {
+  "fromCm": 1,
+  "widthCm": 1,
+  "depthCm": 0.5,
+  "angleDeg": -5,
+  "auto": true
+ },
+ "throwAngle": 80
+}
