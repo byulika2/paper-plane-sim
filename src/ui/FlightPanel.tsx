@@ -25,6 +25,7 @@ import {
 import type { FlightStats, ThrowResult } from './flightStats.js';
 import { WindTunnel } from './WindTunnel.js';
 import { PaperPreview3D } from './PaperPreview3D.js';
+import { StatSheet } from './StatSheet.js';
 
 interface Props {
   /** The measured plane it flies (see `measurePlane`). */
@@ -50,6 +51,8 @@ interface Props {
   onRecompute?(): void;
   /** Of 70, 80 and 90 degrees, the throw angle it flies longest at; null until worked out. */
   recommendedAngle?: number | null;
+  /** The plane's name, at the head of its results. */
+  planeName?: string;
 }
 
 /*
@@ -125,15 +128,6 @@ function Slider({ value, min, max, step, onChange }: {
   );
 }
 
-function Meter({ value, label, tone }: { value: number; label: string; tone: 'good' | 'warn' | 'bad' }) {
-  return (
-    <div className={`flight-meter ${tone}`}>
-      <div className="bar"><span style={{ width: `${Math.max(4, Math.min(100, value * 100))}%` }} /></div>
-      <span>{label}</span>
-    </div>
-  );
-}
-
 /**
  * Nothing to fly until something is folded into a wing: a sheet still flat, or
  * folded so nothing lies level, has no wing area, and every figure below it
@@ -156,7 +150,7 @@ export function FlightPanel(props: Props) {
 function FlightField({
   spec, plies, paper, settings, onSettings, shownPlies, elevatorTune, recommended,
   ownElevator, onElevatorTune, onUseRecommended, onRecompute,
-  recommendedAngle,
+  recommendedAngle, planeName,
 }: Props) {
   const r = settings.region;
   const airframe = spec.af;
@@ -175,7 +169,7 @@ function FlightField({
   const setVee = (v: number) => set({ vee: v });
   const {
     bulge, af, m, launch, flight, vee, flatWing,
-    balance, loading,
+    loading,
   } = report;
   const cm = (v: number) => (v * 100).toFixed(1);
   // Each wing's rise off the flat as the paper was folded, degrees.
@@ -408,65 +402,29 @@ function FlightField({
                 </p>
               )}
               {shown ? (
-                <>
-                  <div className="flight-big">
-                    <div className="lead">
-                      <b>{shown.time.low >= 89.9 ? '90초 넘게' : `${shown.time.mean.toFixed(1)}초`}</b>
-                      <span>{shown.time.best >= 89.9
-                        ? `${shown.n}번 중 ${shown.capped}번은 90초 넘게 떠 있어요 (상승 기류를 탔어요)`
-                        : `${shown.n}번 던진 평균 · 보통 ${shown.time.low.toFixed(1)}~${shown.time.high.toFixed(1)}초 · 가장 좋았던 ${shown.time.best.toFixed(1)}초`}</span>
-                    </div>
-                    <div><b>{shown.height.mean.toFixed(1)}m</b><span>평균 가장 높이 · 보통 {shown.height.low.toFixed(1)}~{shown.height.high.toFixed(1)}m</span></div>
-                    <div><b>{shown.distance.mean.toFixed(1)}m</b><span>평균 던진 곳에서 떨어진 곳까지</span></div>
-                  </div>
-                  <div className="flight-kind">
-                    <strong>{kindText.title}</strong>
-                    <span>
-                      {shown.n}번 중 {KIND_NAMES.filter(([k]) => shown.kinds[k] > 0)
-                        .map(([k, name]) => `${name} ${shown.kinds[k]}번`).join(', ')}
-                    </span>
-                    <span>{kindText.tip}</span>
-                  </div>
-                  {shown.height.high > 13 && (
-                    <p className="flight-hint">체육관 천장은 보통 15m쯤이에요. 실내라면 천장에 닿지 않게 조금 약하게 던져요.</p>
-                  )}
-                </>
-              ) : <p className="flight-hint">던지는 중…</p>}
-          </div>
-
-          <h3>비행기 정보</h3>
-          <dl className="flight-facts">
-            <dt>무게</dt><dd>{(af.mass.mass * 1000).toFixed(1)}g</dd>
-            <dt>무게중심</dt><dd>코끝에서 {cm(af.cgFromNose)}cm · 길이 {cm(af.length)}cm</dd>
-            <dt>균형점</dt><dd>코끝에서 {cm(m.neutralFromNose)}cm</dd>
-            <dt>날개 넓이</dt><dd>{(af.wingArea * 1e4).toFixed(0)}cm² · 폭 {cm(af.span)}cm</dd>
-            <dt>날개가 버티는 무게</dt><dd>100cm²마다 {loading.toFixed(2)}g</dd>
-            <dt>코 두께</dt><dd>{(spec.summary.noseThickness * 1000).toFixed(1)}mm{report.bulge.side > 0 ? ' · 날개 위로 볼록' : report.bulge.side < 0 ? ' · 날개 아래로 볼록' : ''}</dd>
-            <dt>동체 깊이</dt><dd>{cm(spec.summary.keelDepth)}cm</dd>
-            {spec.panels.length > 1 && <dt>날개 꺾임</dt>}
-            {spec.panels.length > 1 && <dd>{spec.panels.map((p) => `${cm(p.from)}~${cm(p.to)}cm ${p.angleDeg}°`).join(' · ')}</dd>}
-            {flight.trimSpeed && <dt>혼자 날 때 속도</dt>}
-            {flight.trimSpeed && <dd>초속 {flight.trimSpeed.toFixed(1)}m · 1m 내려갈 때 {flight.glideRatio!.toFixed(1)}m 앞으로</dd>}
-          </dl>
-
-          <h3>비행 평가 (오래 날리기 · {shown ? `${shown.n}번 던진 결과` : '계산 중'})</h3>
-          {/* Only the hundred throws' grades, the ones the card shows: one throw is scored another way. */}
-          {!shown && <p className="flight-hint">100번 던지는 중이에요. 끝나면 점수를 보여 줘요.</p>}
-          <div className="flight-grades">
-            {(shown ? [...shown.grades, balanceGrade(report.margin)] : []).map((g) => (
-              <div key={g.key} className={`grade ${g.score >= 70 ? 'good' : g.score >= 40 ? 'warn' : 'bad'}`} title={g.hint}>
-                <div className="grade-head"><b>{g.label}</b><span>{(g.score / 10).toFixed(1)}<small>/10</small></span></div>
-                <div className="bar"><span style={{ width: `${Math.max(3, g.score)}%` }} /></div>
-                <p>{g.value}</p>
-                <p className="grade-hint">{g.hint}</p>
-              </div>
-            ))}
-          </div>
-          <h3>안정성</h3>
-          <div className="flight-stability">
-            <div><h4>앞뒤 균형</h4>
-              <Meter value={balance.tone === 'good' ? 0.85 : balance.tone === 'warn' ? 0.5 : 0.2}
-                tone={balance.tone} label={balance.text} /></div>
+                <StatSheet name={planeName ?? ''} grades={[...shown.grades, balanceGrade(report.margin)]}
+                  time={shown.time} height={shown.height.mean} distance={shown.distance.mean}
+                  kind={kindText}
+                  kinds={`${shown.n}번 중 ${KIND_NAMES.filter(([k]) => shown.kinds[k] > 0).map(([k, name]) => `${name} ${shown.kinds[k]}번`).join(', ')}`}
+                  facts={(
+                <dl className="flight-facts">
+                  <dt>무게</dt><dd>{(af.mass.mass * 1000).toFixed(1)}g</dd>
+                  <dt>무게중심</dt><dd>코끝에서 {cm(af.cgFromNose)}cm · 길이 {cm(af.length)}cm</dd>
+                  <dt>균형점</dt><dd>코끝에서 {cm(m.neutralFromNose)}cm</dd>
+                  <dt>날개 넓이</dt><dd>{(af.wingArea * 1e4).toFixed(0)}cm² · 폭 {cm(af.span)}cm</dd>
+                  <dt>날개가 버티는 무게</dt><dd>100cm²마다 {loading.toFixed(2)}g</dd>
+                  <dt>코 두께</dt><dd>{(spec.summary.noseThickness * 1000).toFixed(1)}mm{report.bulge.side > 0 ? ' · 날개 위로 볼록' : report.bulge.side < 0 ? ' · 날개 아래로 볼록' : ''}</dd>
+                  <dt>동체 깊이</dt><dd>{cm(spec.summary.keelDepth)}cm</dd>
+                  {spec.panels.length > 1 && <dt>날개 꺾임</dt>}
+                  {spec.panels.length > 1 && <dd>{spec.panels.map((p) => `${cm(p.from)}~${cm(p.to)}cm ${p.angleDeg}°`).join(' · ')}</dd>}
+                  {flight.trimSpeed && <dt>혼자 날 때 속도</dt>}
+                  {flight.trimSpeed && <dd>초속 {flight.trimSpeed.toFixed(1)}m · 1m 내려갈 때 {flight.glideRatio!.toFixed(1)}m 앞으로</dd>}
+                </dl>
+                  )} />
+              ) : <p className="flight-hint">100번 던지는 중이에요. 끝나면 능력치를 보여 줘요.</p>}
+              {shown && shown.height.high > 13 && (
+                <p className="flight-hint">체육관 천장은 보통 15m쯤이에요. 실내라면 천장에 닿지 않게 조금 약하게 던져요.</p>
+              )}
           </div>
 
           <p className="flight-note">

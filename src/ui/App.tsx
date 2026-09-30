@@ -2554,7 +2554,7 @@ export function App() {
           * which gives the model the whole window.
           */}
         {showFlight && airframe && flySpec && (rec || imported) && (
-          <FlightPanel spec={flySpec} plies={restSpec ? restPlies : plies} paper={paper}
+          <FlightPanel spec={flySpec} planeName={planeName} plies={restSpec ? restPlies : plies} paper={paper}
             settings={flightView} onSettings={onFlightSettings} shownPlies={reshapedPlies}
             elevatorTune={elevUsed ?? elevShown} recommended={rec}
             ownElevator={!!flyElev}
