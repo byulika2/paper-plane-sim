@@ -272,7 +272,8 @@ function FlightField({
         </div>
       </div>
       <div className="flight-body">
-        <section className="flight-inputs">
+        {/* The throw and the tuning belong to the simulator; the results page is the stat screen alone. */}
+        {view === 'tunnel' && <section className="flight-inputs">
           <h3>던지는 힘</h3>
           <Choice items={THROWS} value={speed} pick={(t) => setSpeed(t.speed)}
             label={(t) => t.label} same={(t, v) => t.speed === v} />
@@ -384,7 +385,7 @@ function FlightField({
                 : '코 아랫부분이 볼록해요. 빠르게 올라갈 때 코가 숙여지기 쉬운데, 추천 엘리베이터가 그만큼 맞춰 줘요.'}
             </p>
           )}
-        </section>
+        </section>}
 
         {view === 'tunnel' ? (
           <section className="flight-results flight-tunnel-view">
