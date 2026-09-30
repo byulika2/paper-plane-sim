@@ -32,7 +32,7 @@ import { useAnimatedPlies } from './useAnimatedPlies.js';
 import { renderFaces, turnedFromViewerAt } from '../origami/space.js';
 import { faceUnder } from '../origami/folding.js';
 import { collapsePattern } from '../origami/collapse.js';
-import { buildAirframe, noseStretch } from '../aero/airframe.js';
+import { buildAirframe, noseStretch, rolledBack } from '../aero/airframe.js';
 import { measurePlane } from '../aero/spec.js';
 import { noseBulge } from '../aero/flight.js';
 import { bendElevator, defaultElevator } from './elevator.js';
@@ -923,8 +923,9 @@ export function App() {
   const { restPlies, restSpec } = useMemo(() => {
     const drawn = renderFaces(session.state, -1, paper.foldedPitch);
     const roll = rollRetreat(steps, session, paper.foldedPitch, drawn, paper);
-    const spec = measurePlane(drawn, paper, paper.foldedPitch, foldEdges(steps, session, paper.foldedPitch, drawn, paper), roll.retreat);
-    return { restPlies: drawn, restSpec: spec };
+    const plies = rolledBack(drawn, paper, roll.retreat, roll.band);
+    const spec = measurePlane(plies, paper, paper.foldedPitch, foldEdges(steps, session, paper.foldedPitch, drawn, paper));
+    return { restPlies: plies, restSpec: spec };
   }, [steps, session, paper]);
   const restAirframe = restSpec?.af ?? null;
 

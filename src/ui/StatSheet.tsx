@@ -43,6 +43,12 @@ export function StatSheet({ name, grades, time, height, distance, kind, kinds, f
         </div>
       </header>
 
+      {/* The plane itself first: what it is, then how it flies. */}
+      <section className="stat-facts">
+        <h4>비행기 정보</h4>
+        {facts}
+      </section>
+
       <div className="stat-body">
         <div className="stat-radar">
           <Pentagon grades={grades} height={260} letters total={total} />
@@ -75,10 +81,6 @@ export function StatSheet({ name, grades, time, height, distance, kind, kinds, f
 
       <p className="stat-kinds">{kinds} · {kind.tip}</p>
 
-      <details className="stat-facts">
-        <summary>비행기 정보</summary>
-        {facts}
-      </details>
     </div>
   );
 }

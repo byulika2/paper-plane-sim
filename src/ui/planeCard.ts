@@ -9,6 +9,7 @@
  */
 
 import { measurePlane } from '../aero/spec.js';
+import { rolledBack } from '../aero/airframe.js';
 import { renderFaces } from '../origami/space.js';
 import { SHEET_SIZES, paperProps } from '../paper/stock.js';
 import type { PaperProps } from '../paper/stock.js';
@@ -96,10 +97,11 @@ function build(r: PlaneRecord) {
   const sess = replay(r.widthMm / 1000, r.heightMm / 1000, r.steps, paperNow.foldedPitch);
   const drawn = renderFaces(sess.state, -1, paperNow.foldedPitch);
   const roll = rollRetreat(r.steps, sess, paperNow.foldedPitch, drawn, paperNow);
-  const plies = drawn;
+  // Real paper's: its rolled nose back as far as its rolls leave it, its weight with it.
+  const plies = rolledBack(drawn, paperNow, roll.retreat, roll.band);
   // Measured once; the flight is worked out on the measurements alone.
   const spec = measurePlane(plies, paperNow, paperNow.foldedPitch,
-    foldEdges(r.steps, sess, paperNow.foldedPitch, drawn, paperNow), roll.retreat);
+    foldEdges(r.steps, sess, paperNow.foldedPitch, drawn, paperNow));
   return { paper: paperNow, plies, spec, af: spec?.af ?? null };
 }
 function modelOf(r: PlaneRecord) {

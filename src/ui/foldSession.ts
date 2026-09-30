@@ -329,13 +329,16 @@ function sameLine(
 export interface Carried { readonly share: number; readonly plies: number; readonly depth: number }
 
 /*
- * How much of a bundle's wrap the paper pays for: all of it, half a turn
- * round the bundle's average depth at the paper's own caliper. With nothing
- * fitted it gives both measurements there are: Birdman's nose 5.8 mm back and
- * its balance point 2.50 cm from it, where the guide says 2.5; and the pupil's
- * Unis 11.0 cm long, where the drawing makes it 11.8 and the real one 11.1.
+ * How much of a bundle's wrap the paper pays for, as a share of half a turn
+ * round the bundle's average depth at the paper's caliper: 1.9 - rolled paper
+ * is not pressed dead flat, and each turn takes nearly twice the paper a bare
+ * caliper would. Set on the one aeroplane measured in print, the guide's
+ * Birdman: 11.2 cm long folded, where the drawing makes it 12.3; with this
+ * the same sum gives it 17.5 cm across (the guide: 17.4), 178 cm2 of wing
+ * (183.7) and its balance point 2.7 cm from the nose (2.5) - and every other
+ * aeroplane is rolled by the same rule.
  */
-const WRAP = 1;
+const WRAP = 1.9;
 /* A roll's crease lies in the front of the finished aeroplane, across it. */
 const NOSE_SHARE = 0.4;
 

@@ -180,8 +180,6 @@ function heightAt(pts: readonly Vec3[], x: number, y: number): number {
  */
 export function measurePlane(
   plies: readonly RenderFace[], paper: PaperProps, caliper: number, folds: readonly FoldEdge[] = [],
-  /** How far the real nose sits back from the drawn one (see `rollRetreat`). */
-  retreat = 0,
 ): PlaneSpec | null {
   if (plies.length < 2) return null;
   const drawn = buildAirframe(plies, paper);
@@ -370,11 +368,8 @@ export function measurePlane(
   /*
    * The equivalent aeroplane: its planform and V off the map, its weight
    * and inertia off the paper. Twenty-four stations, as the lattice has
-   * always been given; every cell of the map goes into its area. The real
-   * nose sits `retreat` back from the drawn one: the leading edge comes back
-   * with it, the weight stays where the paper is.
-   */
-  const nose = maxX - Math.max(0, retreat);
+   * always been given; every cell of the map goes into its area. */
+  const nose = maxX;
   const STATIONS = 24;
   const stations: Station[] = [];
   let area = 0;

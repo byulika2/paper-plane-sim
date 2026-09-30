@@ -337,13 +337,17 @@ export function buildAirframe(
 }
 
 /**
- * Real paper's rolls, as a change to points, for showing: the nose `retreat`
- * further back than the drawing puts it, and the wing between its trailing
- * edge and the back of the last roll's bundle - `band` behind the nose -
- * drawn that much shorter, evenly, so every flat ply stays flat and a line on
- * the paper stays straight. Null when there is nothing to move. (The flight
- * takes the same retreat off the measured plane, weight left where it is:
- * see `measurePlane`.)
+ * Real paper's rolls, as a change to points: the rolled bundle - everything
+ * ahead of its back edge, `band` behind the nose - comes `retreat` back, and
+ * the flat wing behind it stays where it is. The paper each roll wraps round
+ * its bundle comes out of the band being rolled, so it is the bundle that
+ * ends up short of its line, and it takes its weight back with it; the
+ * paper behind was never rolled. A ply that runs from the wing into the
+ * bundle keeps its far end and loses its near one. Null when nothing moves.
+ *
+ * One change for everything drawn and flown - the plies, the lines on them,
+ * the points the pointer can catch, the weight and the planform the flight is
+ * worked out on.
  */
 export function noseStretch(
   plies: readonly RenderFace[], paper: PaperProps, retreat: number, band: number,
@@ -356,11 +360,14 @@ export function noseStretch(
   // The aeroplane's forward axis, in the plies' own coordinates.
   const forward: Vec3 = [e([1, 0, 0]), e([0, 1, 0]), e([0, 0, 1])];
   const nose = af.cgFromNose;
-  const tail = nose - af.length;
-  const from = Math.max(tail + 1e-4, nose - Math.max(0, Math.min(band, af.length)));
-  return (p) => {
-    const x = af.frame.toBody(p)[0];
-    const k = x >= from ? 1 : x <= tail ? 0 : (x - tail) / (from - tail);
-    return [p[0] - forward[0] * retreat * k, p[1] - forward[1] * retreat * k, p[2] - forward[2] * retreat * k];
-  };
+  const from = nose - Math.max(0, Math.min(band, af.length));
+  return (p) => (af.frame.toBody(p)[0] > from - 1e-4
+    ? [p[0] - forward[0] * retreat, p[1] - forward[1] * retreat, p[2] - forward[2] * retreat]
+    : p);
+}
+
+/** The folded plies as real paper leaves them (see `noseStretch`): its rolled nose back where its rolls leave it. */
+export function rolledBack(plies: readonly RenderFace[], paper: PaperProps, retreat: number, band: number): readonly RenderFace[] {
+  const move = noseStretch(plies, paper, retreat, band);
+  return move ? plies.map((f) => ({ ...f, points: f.points.map(move) })) : plies;
 }

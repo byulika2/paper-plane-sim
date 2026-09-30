@@ -1126,7 +1126,11 @@ input.scrub:hover { border-color: color-mix(in srgb, var(--accent) 55%, transpar
 .stat-tip span { color: var(--dim); font-size: 12px; }
 .stat-kinds { margin: 0; font-size: 12px; color: var(--dim); }
 .stat-facts { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: var(--panel); }
-.stat-facts summary { cursor: pointer; font-weight: 700; color: var(--ink); }
-.stat-facts .flight-facts { margin-top: 10px; }
+.stat-facts h4 { margin: 0 0 8px; font-size: 13px; color: var(--ink); }
+/* Three facts to a row, each its name then its value. */
+.stat-facts .flight-facts { margin: 0; display: grid; grid-template-columns: repeat(3, max-content minmax(0, 1fr)); gap: 6px 12px; align-items: baseline; }
+.stat-facts .flight-facts dt { font-size: 12px; color: var(--dim); }
+.stat-facts .flight-facts dd { margin: 0; color: var(--ink); font-size: 13px; }
+@media (max-width: 1200px) { .stat-facts .flight-facts { grid-template-columns: repeat(2, max-content minmax(0, 1fr)); } }
 @media (max-width: 900px) { .stat-body { grid-template-columns: 1fr; } }
 .pentagon tspan.letter { fill: currentColor; }
