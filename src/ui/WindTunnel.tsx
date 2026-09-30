@@ -1,19 +1,24 @@
 /**
- * The wind tunnel: the aeroplane held still, the air coming at its nose.
+ * The wind tunnel, following a flight through.
  *
- * A throw is over in a few seconds and everything in it changes at once, so it
- * is a poor place to learn what one setting does. Here the pupil holds the
- * speed of the air and the angle of the wing, and sees the lift, the drag and
- * which way the nose is pushed - then changes the V of the wings or the
- * elevator in the panel beside it and watches the same numbers move. It is the folded model itself, drawn from its plies, with
- * the elevator bent as it is on the folding screen.
+ * A throw is over in a few seconds and everything in it changes at once: it
+ * leaves the hand at twenty metres a second, nose into the air and on its
+ * side; it slows to a crawl at the top, where the nose has to come down and
+ * the wings come level; it turns, and then it glides at a walking pace. The
+ * air it meets is a different air in each. So the tunnel does not hold one
+ * moment: it replays one real throw of the hundred - the one whose time is
+ * nearest their average - and shows, at every moment of it, the aeroplane as
+ * it meets the air (its angle to it, its bank, how it is climbing or sinking),
+ * the air rushing or drifting past, the lift, drag and weight, and which part
+ * of the flight it is in. It is the folded model itself, drawn from its
+ * plies, with the elevator bent as it is on the folding screen.
  */
 
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Tunnel3D } from './Tunnel3D.js';
 import type { Airframe } from '../aero/airframe.js';
-import { forcesAt, settleAngle, trim } from '../aero/flight.js';
-import type { AeroModel } from '../aero/flight.js';
+import { forcesAt } from '../aero/flight.js';
+import type { AeroModel, Flight, FlightPoint } from '../aero/flight.js';
 import type { RenderFace } from '../origami/space.js';
 
 interface Props {
@@ -24,82 +29,170 @@ interface Props {
   elevatorDeg: number;
   /** Wings set in a V, degrees, drawn on the front view. */
   vee: number;
-  throwSpeed: number;
+  /** The throw to follow; null while the hundred are still being thrown. */
+  flight: Flight | null;
 }
 
 const G = 9.81;
 const grams = (n: number) => (n / G) * 1000;
+const deg = (r: number) => (r * 180) / Math.PI;
 
-export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, throwSpeed }: Props) {
+export type Phase = 'climb' | 'transition' | 'turn' | 'glide';
+export const PHASE_NAMES: Record<Phase, string> = {
+  climb: '던짐 · 올라가기',
+  transition: '꼭대기 · 트랜지션',
+  turn: '선회',
+  glide: '활공',
+};
+const PHASE_TIPS: Record<Phase, string> = {
+  climb: '손을 떠난 빠른 속도로 옆으로 누워 올라가요. 공기 저항이 커서 속도가 빨리 줄어요.',
+  transition: '가장 느린 순간이에요. 코가 숙여지고 V자 날개 덕분에 수평으로 돌아와요.',
+  turn: '날개가 기울어 양력 일부가 방향을 틀어요. 원을 그리며 내려가요.',
+  glide: '양력이 무게와 거의 같아요. 저항만큼 천천히 내려가요.',
+};
+
+/**
+ * Which part of the flight a moment is in: before the top, the climb; from
+ * the top until it has come level, the transition (the same moment the
+ * transition score is taken at); after that, turning while it is banked more
+ * than fifteen degrees, gliding while it is not.
+ */
+export function phaseAt(flight: Flight, p: FlightPoint): Phase {
+  if (p.t <= flight.apexTime) return 'climb';
+  if (flight.levelTime === null || p.t < flight.levelTime) return 'transition';
+  return Math.abs(p.bank ?? 0) > (15 * Math.PI) / 180 ? 'turn' : 'glide';
+}
+
+/** The recorded moment at or just before `t`. */
+function pointAt(path: readonly FlightPoint[], t: number): FlightPoint {
+  let lo = 0;
+  let hi = path.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (path[mid]!.t <= t) lo = mid; else hi = mid - 1;
+  }
+  // The two ends a flight is closed with carry no air data: take the nearest moment that does.
+  for (let i = lo; i >= 0; i--) if (path[i]!.speed !== undefined) return path[i]!;
+  for (let i = lo; i < path.length; i++) if (path[i]!.speed !== undefined) return path[i]!;
+  return path[lo]!;
+}
+
+export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, flight }: Props) {
   const de = (elevatorDeg * Math.PI) / 180;
   const weight = af.mass.mass * G;
-  /*
-   * Where it starts: the angle the nose settles at, and the speed at which
-   * the wing then holds up exactly the aeroplane's weight - the glide, even
-   * for an aeroplane balanced too finely to have a steady one of its own.
-   */
-  const glideAt = (() => {
-    const t = trim(af, m, de);
-    if (t) return { speed: t.speed, alpha: t.alpha };
-    const st = settleAngle(af, m, de, 5);
-    const a = st.alpha ?? 0.1;
-    const cl = forcesAt(af, m, a, 5, de).cl;
-    return cl > 0.02 ? { speed: Math.sqrt((2 * weight) / (1.225 * af.wingArea * cl)), alpha: a } : null;
-  })();
-  const settle = settleAngle(af, m, de, glideAt?.speed ?? 5);
-  const [speed, setSpeed] = useState(() => Math.round((glideAt?.speed ?? 5) * 2) / 2);
-  const [alphaDeg, setAlphaDeg] = useState(() =>
-    Math.round(((settle.alpha ?? 0.07) * 180) / Math.PI));
-  const alpha = (alphaDeg * Math.PI) / 180;
-  const f = forcesAt(af, m, alpha, speed, de);
-  const here = settleAngle(af, m, de, speed);
-  const holdUp = f.cl > 0.02 ? Math.sqrt((2 * weight) / (1.225 * af.wingArea * f.cl)) : null;
+  const [t, setT] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [slow, setSlow] = useState(false);
+  const total = flight?.time ?? 0;
 
+  // A new throw starts from the hand.
+  useEffect(() => { setT(0); setPlaying(false); }, [flight]);
+
+  // Playing: time runs on at the flight's own pace, or a quarter of it.
+  const rate = useRef(1);
+  rate.current = slow ? 0.25 : 1;
+  const clock = useRef(0);
+  clock.current = t;
+  useEffect(() => {
+    if (!playing || !flight) return;
+    let raf = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      const next = Math.min(total, clock.current + dt * rate.current);
+      setT(next);
+      if (next >= total) { setPlaying(false); return; }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing, flight, total]);
+
+  const moment = useMemo(() => (flight ? pointAt(flight.path, t) : null), [flight, t]);
+
+  if (!flight || !moment) {
+    return <div className="tunnel"><p className="flight-hint">100번 던지는 중이에요. 끝나면 평균에 가장 가까운 한 번을 따라가 볼 수 있어요.</p></div>;
+  }
+
+  const speed = moment.speed ?? 0;
+  const alpha = moment.alpha ?? 0;
+  const gamma = moment.gamma ?? 0;
+  const bank = moment.bank ?? 0;
+  const lift = moment.lift ?? 0;
+  const drag = moment.drag ?? 0;
+  const f = forcesAt(af, m, alpha, Math.max(0.3, speed), de);
+  const phase = phaseAt(flight, moment);
   const pitchWord = Math.abs(f.cm) < 0.004 ? '거의 없어요'
     : `${f.cm > 0 ? '머리를 드는' : '머리를 숙이는'} 힘이 ${Math.abs(f.cm) < 0.02 ? '조금' : '세게'} 있어요`;
+
+  // The throw seen from the side, the moment marked on it.
+  const pts = flight.path;
+  const xs = pts.map((p) => p.x);
+  const minX = Math.min(0, ...xs);
+  const maxX = Math.max(0.5, ...xs);
+  const maxH = Math.max(1, ...pts.map((p) => p.h));
+  const W = 320; const H = 150; const pad = 8;
+  const sx = (x: number) => pad + ((x - minX) / (maxX - minX || 1)) * (W - 2 * pad);
+  const sy = (h: number) => H - pad - (h / maxH) * (H - 2 * pad);
+  const colour: Record<Phase, string> = { climb: '#f59e0b', transition: '#ef4444', turn: '#a78bfa', glide: '#22c55e' };
+  const segments: { phase: Phase; d: string }[] = [];
+  for (let i = 1; i < pts.length; i++) {
+    const ph = phaseAt(flight, pts[i]!);
+    const seg = `L${sx(pts[i]!.x).toFixed(1)},${sy(pts[i]!.h).toFixed(1)}`;
+    const lastSeg = segments[segments.length - 1];
+    if (lastSeg && lastSeg.phase === ph) lastSeg.d += seg;
+    else segments.push({ phase: ph, d: `M${sx(pts[i - 1]!.x).toFixed(1)},${sy(pts[i - 1]!.h).toFixed(1)}${seg}` });
+  }
 
   return (
     <div className="tunnel">
       <div className="tunnel-controls">
-        <label>
-          바람 세기 <b>초속 {speed}m</b> <span>(시속 {Math.round(speed * 3.6)}km)</span>
-          <input type="range" min={2} max={25} step={0.5} value={speed} onChange={(e) => setSpeed(Number(e.target.value))} />
-        </label>
+        <div className="tunnel-phase" style={{ borderColor: colour[phase] }}>
+          <b style={{ color: colour[phase] }}>{PHASE_NAMES[phase]}</b>
+          <span>{PHASE_TIPS[phase]}</span>
+        </div>
         <div className="flight-choices">
-          {glideAt && <button onClick={() => { setSpeed(Math.round(glideAt.speed * 2) / 2); setAlphaDeg(Math.round((glideAt.alpha * 180) / Math.PI)); }}>
-            활공할 때 (초속 {glideAt.speed.toFixed(1)}m)</button>}
-          <button onClick={() => setSpeed(Math.round(throwSpeed * 2) / 2)}>던질 때 (초속 {throwSpeed}m)</button>
+          <button onClick={() => { if (t >= total) setT(0); setPlaying(!playing); }}>{playing ? '❚❚ 멈춤' : '▶ 재생'}</button>
+          <button className={slow ? 'on' : ''} onClick={() => setSlow(!slow)}>느리게 (¼배)</button>
+          <button onClick={() => { setPlaying(false); setT(0); }}>처음으로</button>
         </div>
         <label>
-          날개 각도 (받음각) <b>{alphaDeg}°</b>
-          <input type="range" min={-5} max={20} step={1} value={alphaDeg} onChange={(e) => setAlphaDeg(Number(e.target.value))} />
+          시간 <b>{t.toFixed(1)}초</b> / {total.toFixed(1)}초
+          <input type="range" min={0} max={total} step={0.02} value={t}
+            onChange={(e) => { setPlaying(false); setT(Number(e.target.value)); }} />
         </label>
-        {here.alpha !== null && (
-          <button className="link" onClick={() => setAlphaDeg(Math.round((here.alpha! * 180) / Math.PI))}>
-            코가 자리 잡는 각도로 ({((here.alpha * 180) / Math.PI).toFixed(1)}°)
-          </button>
-        )}
+        <svg className="tunnel-path" viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="옆에서 본 비행 경로">
+          <line x1={0} y1={sy(0)} x2={W} y2={sy(0)} stroke="#334155" />
+          {segments.map((s, i) => <path key={i} d={s.d} fill="none" stroke={colour[s.phase]} strokeWidth={2} />)}
+          <circle cx={sx(moment.x)} cy={sy(moment.h)} r={5} fill="#fff" stroke="#0f172a" strokeWidth={2} />
+        </svg>
+        <div className="tunnel-legend">
+          {(Object.keys(PHASE_NAMES) as Phase[]).map((k) => (
+            <span key={k}><i style={{ background: colour[k] }} />{PHASE_NAMES[k]}</span>
+          ))}
+        </div>
       </div>
 
-      <Tunnel3D af={af} drawPlies={drawPlies} alpha={alpha} vee={vee} cl={f.cl} stalled={f.stalled}
-        lift={Math.max(0, f.lift)} drag={f.drag} weight={weight} cm={f.cm}
+      <Tunnel3D af={af} drawPlies={drawPlies} alpha={alpha} bank={bank} gamma={gamma} airSpeed={speed}
+        vee={vee} cl={f.cl} stalled={f.stalled}
+        lift={Math.max(0, lift)} drag={drag} weight={weight} cm={f.cm}
         labels={{
-          lift: `양력 ${grams(f.lift).toFixed(1)}g`,
-          drag: `항력 ${grams(f.drag).toFixed(1)}g`,
+          lift: `양력 ${grams(lift).toFixed(1)}g`,
+          drag: `항력 ${grams(drag).toFixed(1)}g`,
           weight: `무게 ${grams(weight).toFixed(1)}g`,
         }} />
 
       <dl className="tunnel-facts">
-        <dt>양력</dt>
-        <dd>{grams(f.lift).toFixed(1)}g · 비행기 무게의 {(f.lift / weight).toFixed(1)}배
-          {f.lift < weight * 0.95 ? ' (무게보다 작아서 내려가요)' : f.lift > weight * 1.05 ? ' (무게보다 커서 올라가요)' : ' (무게와 같아서 떠 있어요)'}</dd>
-        <dt>항력 (공기 저항)</dt><dd>{grams(f.drag).toFixed(2)}g</dd>
+        <dt>높이</dt><dd>{moment.h.toFixed(1)}m</dd>
+        <dt>바람 (비행 속도)</dt><dd>초속 {speed.toFixed(1)}m · 시속 {Math.round(speed * 3.6)}km</dd>
+        <dt>날개 각도 (받음각)</dt><dd>{deg(alpha).toFixed(1)}°</dd>
+        <dt>{gamma >= 0 ? '올라가는 각도' : '내려가는 각도'}</dt><dd>{Math.abs(deg(gamma)).toFixed(0)}°</dd>
+        <dt>옆으로 기운 각도</dt><dd>{Math.abs(deg(bank)).toFixed(0)}°{Math.abs(deg(bank)) > 60 ? ' (옆으로 누워 있어요)' : ''}</dd>
+        <dt>양력</dt><dd>{grams(lift).toFixed(1)}g · 비행기 무게의 {(lift / weight).toFixed(1)}배</dd>
+        <dt>항력 (공기 저항)</dt><dd>{grams(drag).toFixed(2)}g</dd>
         <dt>머리 움직임</dt><dd>{pitchWord}</dd>
-        <dt>코가 자리 잡는 각도</dt>
-        <dd>{here.alpha === null ? '자리 잡는 각도가 없어요'
-          : `${((here.alpha * 180) / Math.PI).toFixed(1)}° · ${here.stable ? '흔들려도 돌아와요 (안정)' : '흔들리면 더 벌어져요 (불안정)'}`}</dd>
-        <dt>실속</dt><dd>{f.stalled ? '날개 위 공기가 떨어져 나가요 (실속). 각도를 줄여요.' : '공기가 날개를 잘 따라 흘러요'}</dd>
-        {holdUp && <><dt>이 각도로 떠 있으려면</dt><dd>바람 초속 {holdUp.toFixed(1)}m</dd></>}
+        <dt>실속</dt><dd>{Math.abs(alpha) > m.stall ? '날개 위 공기가 떨어져 나가요 (실속)' : '공기가 날개를 잘 따라 흘러요'}</dd>
       </dl>
     </div>
   );

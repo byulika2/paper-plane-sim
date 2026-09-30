@@ -28,6 +28,12 @@ interface Props {
   drawPlies: readonly RenderFace[];
   /** Angle of attack, radians. */
   alpha: number;
+  /** Bank, radians: how far it is rolled onto its side. */
+  bank?: number;
+  /** Climb angle, radians: which way the weight pulls against the stream. */
+  gamma?: number;
+  /** The air's speed past it, m/s: how fast the specks drift. */
+  airSpeed?: number;
   /** Wings set in a V, degrees. */
   vee: number;
   cl: number;
@@ -57,7 +63,7 @@ export function Tunnel3D(props: Props) {
   const labelRef = useRef<HTMLDivElement>(null);
   const live = useRef(props);
   live.current = props;
-  const api = useRef<{ view(dir: Vec3): void; rebuild(): void } | null>(null);
+  const api = useRef<{ view(dir: Vec3): void; rebuild(): void; pose(): void } | null>(null);
   const [viewName, setViewName] = useState('비스듬히');
 
   useEffect(() => {
@@ -98,10 +104,11 @@ export function Tunnel3D(props: Props) {
       }
     };
 
+    // The model itself: built when the aeroplane changes, not with every moment of a flight.
     const rebuild = () => {
       const p = live.current;
       const { af } = p;
-      clear(plane); clear(forces); clear(air);
+      clear(plane);
       reach = Math.max(af.span, af.length, 0.08);
       // The wings lifted into their V about the keel, as on the flying screen.
       const vee = liftWings(af, p.drawPlies, p.vee);
@@ -127,8 +134,18 @@ export function Tunnel3D(props: Props) {
       const eg = new THREE.BufferGeometry();
       eg.setAttribute('position', new THREE.Float32BufferAttribute(edges, 3));
       plane.add(new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x7a8aa0, transparent: true, opacity: 0.55 })));
-      // Pitched nose-up about the span, the air still coming straight at it.
-      plane.rotation.set(0, 0, p.alpha);
+      pose();
+    };
+
+    // The moment: its angle to the air, its bank, the forces and the air, redrawn as the flight goes on.
+    const pose = () => {
+      const p = live.current;
+      const { af } = p;
+      clear(forces); clear(air);
+      const bank = p.bank ?? 0;
+      const gamma = p.gamma ?? 0;
+      // Pitched nose-up about the span and rolled onto its side, the air still coming straight at it.
+      plane.rotation.set(bank, 0, p.alpha, 'XYZ');
 
       // Forces from the centre of gravity, in the air's axes: lift square to
       // the stream, drag along it, weight straight down. One scale for all.
@@ -138,10 +155,12 @@ export function Tunnel3D(props: Props) {
         forces.add(new THREE.ArrowHelper(dir, new THREE.Vector3(), len, color, Math.min(0.03, len * 0.3), Math.min(0.018, len * 0.2)));
         return dir.clone().multiplyScalar(len);
       };
-      tips.lift = arrow(new THREE.Vector3(0, 1, 0), Math.max(0, p.lift), 0x22c55e);
+      // Lift square to the stream and tipped with the wings; weight straight down,
+      // which against a stream climbing at gamma leans back along it.
+      tips.lift = arrow(new THREE.Vector3(0, Math.cos(bank), Math.sin(bank)), Math.max(0, p.lift), 0x22c55e);
       // Drag drawn four times over, or it is too short to see.
       tips.drag = arrow(new THREE.Vector3(-1, 0, 0), p.drag * 4, 0xf59e0b);
-      tips.weight = arrow(new THREE.Vector3(0, -1, 0), p.weight, 0xef4444);
+      tips.weight = arrow(new THREE.Vector3(-Math.sin(gamma), -Math.cos(gamma), 0), p.weight, 0xef4444);
 
       // The air: rows of specks across the span and above and below it.
       const half = af.span / 2;
@@ -197,7 +216,7 @@ export function Tunnel3D(props: Props) {
       camera.up.set(0, 1, 0);
       controls.update();
     };
-    api.current = { view, rebuild };
+    api.current = { view, rebuild, pose };
     rebuild();
     view(VIEWS[0]![1]);
 
@@ -229,7 +248,9 @@ export function Tunnel3D(props: Props) {
         const arr = (points.geometry.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
         let k = 0;
         for (const s of specks) {
-          s.phase = (s.phase + dt * 0.18) % 1;
+          // Faster air, faster specks: a throw's rush and a glide's drift read apart.
+          const pace = live.current.airSpeed ? Math.min(0.9, Math.max(0.05, 0.18 * (live.current.airSpeed / 5))) : 0.18;
+          s.phase = (s.phase + dt * pace) % 1;
           for (let j = 0; j < 6; j++) {
             const t = (s.phase + j / 6) % 1;
             const f = t * (s.path.length - 1);
@@ -267,9 +288,10 @@ export function Tunnel3D(props: Props) {
     };
   }, []);
 
-  // Anything that changes the picture rebuilds it; the camera stays put.
-  const { drawPlies, alpha, vee, cl, stalled, lift, drag, weight } = props;
-  useEffect(() => { api.current?.rebuild(); }, [drawPlies, alpha, vee, cl, stalled, lift, drag, weight]);
+  // A new aeroplane rebuilds the model; a new moment only turns it and redraws the air. The camera stays put.
+  const { af, drawPlies, alpha, vee, cl, stalled, lift, drag, weight, bank, gamma } = props;
+  useEffect(() => { api.current?.rebuild(); }, [af, drawPlies, vee]);
+  useEffect(() => { api.current?.pose(); }, [alpha, cl, stalled, lift, drag, weight, bank, gamma]);
 
   return (
     <div className="tunnel3d">

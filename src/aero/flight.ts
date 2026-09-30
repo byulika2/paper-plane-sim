@@ -318,7 +318,20 @@ function pitchCoefficient(m: AeroModel, alpha: number, elevator: number, s: numb
   return (1 - s) * attached + s * plate;
 }
 
-export interface FlightPoint { readonly t: number; readonly x: number; readonly h: number; readonly pitch: number }
+export interface FlightPoint {
+  readonly t: number; readonly x: number; readonly h: number; readonly pitch: number;
+  /**
+   * The moment as the aeroplane meets it, for following a flight through:
+   * airspeed (m/s), angle of attack, climb angle and bank (radians), lift
+   * and drag (N). Left out of the two ends a flight is closed with.
+   */
+  readonly speed?: number;
+  readonly alpha?: number;
+  readonly gamma?: number;
+  readonly bank?: number;
+  readonly lift?: number;
+  readonly drag?: number;
+}
 
 export type FlightKind = 'transition' | 'glide' | 'stall' | 'loop' | 'dive' | 'short';
 
@@ -336,6 +349,9 @@ export interface Flight {
   readonly trimSpeed: number | null;
   readonly glideRatio: number | null;
   readonly score: FlightScore;
+  /** When it reached the top of its climb, s, and when it then came level to glide (null if it never did). */
+  readonly apexTime: number;
+  readonly levelTime: number | null;
 }
 
 /**
@@ -550,7 +566,7 @@ export function fly(af: Airframe, m: AeroModel, launch: Launch, dt = 0.004): Fli
         V * cg * Math.sin(psi),
         V * Math.sin(gamma),
       ],
-      L, V, alpha,
+      L, D, V, alpha,
     };
   };
 
@@ -609,7 +625,12 @@ export function fly(af: Airframe, m: AeroModel, launch: Launch, dt = 0.004): Fli
       if (!levelAt && levelRun > 0.3) levelAt = { t, h: st[8]! };
     } else if (!levelAt) levelRun = 0;
     if (pitch > Math.PI * 0.6 && st[8]! >= airTop - 1e-6) loopedClimbing = true;
-    if (steps % every === 0) path.push({ t, x: Math.hypot(g.x, g.y) * Math.sign(g.x || 1), h: Math.max(0, g.h), pitch });
+    if (steps % every === 0) {
+      path.push({
+        t, x: Math.hypot(g.x, g.y) * Math.sign(g.x || 1), h: Math.max(0, g.h), pitch,
+        speed: k1.V, alpha: k1.alpha, gamma: st[1]!, bank: st[5]!, lift: k1.L, drag: k1.D,
+      });
+    }
     if (g.h <= 0) break;
   }
   const end = ground(st, t);
@@ -621,6 +642,7 @@ export function fly(af: Airframe, m: AeroModel, launch: Launch, dt = 0.004): Fli
     return {
       path: [{ t: 0, x: 0, h: launch.height, pitch: up }, { t: 0, x: 0, h: 0, pitch: up }],
       distance: 0, time: 0, maxHeight: launch.height, maxLoad, maxAirspeed: maxAir, drift: 0, kind: 'short',
+      apexTime: 0, levelTime: null,
       trimSpeed: tr ? tr.speed : null, glideRatio: tr ? tr.ratio : null,
       score: { climb: 0, climbShare: 0, loopedClimbing: false, transitionLoss: null, transitionTime: null,
         glideSink: null, minSink: minSink(af, m, de), glideRatio: null },
@@ -650,7 +672,7 @@ export function fly(af: Airframe, m: AeroModel, launch: Launch, dt = 0.004): Fli
   }
   return {
     path, distance, time: t, maxHeight: maxH, maxLoad, maxAirspeed: maxAir,
-    drift: end.y, kind,
+    drift: end.y, kind, apexTime: airApexT, levelTime: levelAt ? levelAt.t : null,
     trimSpeed: tr ? tr.speed : null, glideRatio: tr ? tr.ratio : null,
     score: {
       climb: Math.max(0, airTop - launch.height),

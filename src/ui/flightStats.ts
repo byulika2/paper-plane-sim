@@ -101,6 +101,8 @@ export interface FlightStats {
   readonly kinds: Readonly<Record<FlightKind, number>>;
   /** The throw with the middle time: the one to draw. */
   readonly typical: Flight;
+  /** The throw whose time is nearest the average: the one the wind tunnel follows through. */
+  readonly nearMean: Flight;
   /** Other throws' paths, thinned, to draw faintly behind it. */
   readonly others: readonly Flight['path'][];
   readonly grades: readonly Grade[];
@@ -160,6 +162,8 @@ export function summarize(
   for (const r of results) kinds[r.kind]++;
   const byTime = [...results].sort((a, b) => a.time - b.time);
   const typical = byTime[Math.floor((n - 1) / 2)]!.flight;
+  const meanTime = results.reduce((a, r) => a + r.time, 0) / n;
+  const nearMean = results.reduce((a, r) => (Math.abs(r.time - meanTime) < Math.abs(a.time - meanTime) ? r : a)).flight;
   const others = results
     .filter((r) => r.flight !== typical)
     .slice(0, 24)
@@ -234,7 +238,7 @@ export function summarize(
     time: spread(results.map((r) => r.time)),
     height: spread(results.map((r) => r.height)),
     distance: spread(results.map((r) => r.distance)),
-    kinds, typical, others, grades,
+    kinds, typical, nearMean, others, grades,
     glideRatio: ratios.length ? median(ratios) : null,
     capped: results.filter((r) => r.time >= 89.9).length,
   };

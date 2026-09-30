@@ -472,7 +472,7 @@ function FlightField({
         {view === 'tunnel' ? (
           <section className="flight-results flight-tunnel-view">
             <WindTunnel af={af} m={m} drawPlies={shownPlies ?? plies}
-              elevatorDeg={elevator} vee={vee} throwSpeed={speed} />
+              elevatorDeg={elevator} vee={vee} flight={shown?.nearMean ?? null} />
           </section>
         ) : (
         <section className="flight-results">
