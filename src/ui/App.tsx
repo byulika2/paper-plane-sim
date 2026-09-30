@@ -116,6 +116,18 @@ function laysOn(before: FoldedState, after: FoldedState, line: readonly [Vec2, V
   }));
 }
 
+
+/*
+ * How many plies a fold takes off the top, when it takes some and not all -
+ * the plies that can open a pocket where they are joined to the paper under
+ * them. Counted at the line (the fold bar's 1겹) or off the top of the pile
+ * (겹 선택's 위에서): either way the top plies go, and either way a pocket
+ * they open is asked about. Null for any other fold.
+ */
+function pocketCount(plies: PlySelection | undefined): number | null {
+  return plies && (plies.kind === 'stack' || plies.kind === 'top') ? plies.count : null;
+}
+
 export function App() {
   const [sizeId, setSizeId] = useState('a4');
   // 90 g/m2 is the stock these are folded from here.
@@ -446,9 +458,9 @@ export function App() {
     return () => { live = false; };
   }, []);
   const foldStep = useCallback((step: Step) => {
-    if (step.kind === 'fold' && step.plies?.kind === 'stack' && !step.creaseOnly) {
+    if (step.kind === 'fold' && pocketCount(step.plies) !== null && !step.creaseOnly) {
       const st = session.state;
-      const taken = pliesAtLine(st, step.a, step.b, step.movingSide, step.plies.count);
+      const taken = pliesAtLine(st, step.a, step.b, step.movingSide, pocketCount(step.plies)!);
       const found = pocketOptions(st, step.a, step.b, step.movingSide, taken, step.symmetric ? width / 2 : undefined);
       const hinges = pocketHinges(st, step.a, step.b, taken);
       const near = (l: PatternLine) => hinges.some((h) => [l.a, l.b].some((q) => Math.hypot(q[0] - h.P[0], q[1] - h.P[1]) < 0.015));
@@ -494,9 +506,9 @@ export function App() {
     setGrab(pocketAlign.grab);
     setPocketAlign(null);
     const fs = pocket.step.kind === 'fold' ? pocket.step : null;
-    if (!fs || fs.plies?.kind !== 'stack') return;
+    if (!fs || pocketCount(fs.plies) === null) return;
     const st0 = session.state;
-    const found = pocketOptions(st0, fs.a, fs.b, fs.movingSide, pliesAtLine(st0, fs.a, fs.b, fs.movingSide, fs.plies.count),
+    const found = pocketOptions(st0, fs.a, fs.b, fs.movingSide, pliesAtLine(st0, fs.a, fs.b, fs.movingSide, pocketCount(fs.plies)!),
       fs.symmetric ? width / 2 : undefined, [{ a: wanted[0], b: wanted[1], how: 'align' }]);
     /*
      * The ways that fold along the line 맞춰 접기 gave, and of those the ones
@@ -806,9 +818,9 @@ export function App() {
    */
   const pocketLit = useMemo(() => {
     const p = fold.preview;
-    if (!p || p.creaseOnly || p.plies?.kind !== 'stack') return null;
+    if (!p || p.creaseOnly || pocketCount(p.plies) === null) return null;
     const st = session.state;
-    const count = p.plies.count;
+    const count = pocketCount(p.plies)!;
     const lit = new Set<number>();
     let joined = false;
     const sides: Array<[Vec2, Vec2, Vec2]> = [[p.a, p.b, p.movingSide]];
@@ -835,7 +847,7 @@ export function App() {
    */
   const pocketLift = useMemo(() => {
     const fs = pocket && pocket.step.kind === 'fold' ? pocket.step : null;
-    if (!fs || fs.plies?.kind !== 'stack') return null;
+    if (!fs || pocketCount(fs.plies) === null) return null;
     const st = session.state;
     const sides: Array<[Vec2, Vec2, Vec2]> = [[fs.a, fs.b, fs.movingSide]];
     if (fs.symmetric) sides.push([[width - fs.a[0], fs.a[1]], [width - fs.b[0], fs.b[1]], [width - fs.movingSide[0], fs.movingSide[1]]]);
@@ -843,7 +855,7 @@ export function App() {
     for (const [a, b, m] of sides) {
       const sideOf = (q: Vec2) => (b[0] - a[0]) * (q[1] - a[1]) - (b[1] - a[1]) * (q[0] - a[0]);
       const toward = Math.sign(sideOf(m));
-      for (const f of pliesAtLine(st, a, b, m, fs.plies.count)) {
+      for (const f of pliesAtLine(st, a, b, m, pocketCount(fs.plies)!)) {
         const o = faceOutline(st, f);
         const c = o.reduce((acc, q) => [acc[0] + q[0] / o.length, acc[1] + q[1] / o.length], [0, 0] as Vec2);
         if (Math.sign(sideOf(c)) === toward) faceSide.set(f, [a, b, m]);
@@ -2708,9 +2720,9 @@ export function App() {
                 const line: [Vec2, Vec2] | null = onto && onto.kind === 'edge' ? [onto.s.a, onto.s.b] : edgeOnModel(p, reach * 2)?.view ?? null;
                 if (!line) return;
                 const fs = pocket.step.kind === 'fold' ? pocket.step : null;
-                if (!fs || fs.plies?.kind !== 'stack') return;
+                if (!fs || pocketCount(fs.plies) === null) return;
                 const st0 = session.state;
-                const count = fs.plies.count;
+                const count = pocketCount(fs.plies)!;
                 const along = (l: [Vec2, Vec2]) => pocketOptions(st0, fs.a, fs.b, fs.movingSide,
                   pliesAtLine(st0, fs.a, fs.b, fs.movingSide, count),
                   fs.symmetric ? width / 2 : undefined, [{ a: l[0], b: l[1], how: 'along' }]);
