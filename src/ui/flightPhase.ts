@@ -45,3 +45,30 @@ export function pointAt(path: readonly FlightPoint[], t: number): FlightPoint {
   for (let i = lo; i < path.length; i++) if (path[i]!.speed !== undefined) return path[i]!;
   return path[lo]!;
 }
+
+/**
+ * The moment at `t`, between the recorded ones: every figure run smoothly
+ * from the moment before to the moment after, so a replay at sixty frames a
+ * second does not step through the fifty-a-second record in jolts. The
+ * heading goes the short way round.
+ */
+export function momentAt(path: readonly FlightPoint[], t: number): FlightPoint {
+  const a = pointAt(path, t);
+  const i = path.indexOf(a);
+  let b: FlightPoint | undefined;
+  for (let j = i + 1; j < path.length; j++) if (path[j]!.speed !== undefined) { b = path[j]; break; }
+  if (!b || !(b.t > a.t)) return a;
+  const u = Math.max(0, Math.min(1, (t - a.t) / (b.t - a.t)));
+  const mix = (x: number | undefined, y: number | undefined) =>
+    (x === undefined || y === undefined ? x : x + (y - x) * u);
+  const turn = (x: number | undefined, y: number | undefined) => {
+    if (x === undefined || y === undefined) return x;
+    const d = Math.atan2(Math.sin(y - x), Math.cos(y - x));
+    return x + d * u;
+  };
+  return {
+    t, x: a.x + (b.x - a.x) * u, h: a.h + (b.h - a.h) * u, pitch: a.pitch + (b.pitch - a.pitch) * u,
+    speed: mix(a.speed, b.speed), alpha: mix(a.alpha, b.alpha), gamma: turn(a.gamma, b.gamma), bank: mix(a.bank, b.bank),
+    lift: mix(a.lift, b.lift), drag: mix(a.drag, b.drag), gx: mix(a.gx, b.gx), gy: mix(a.gy, b.gy), heading: turn(a.heading, b.heading),
+  };
+}

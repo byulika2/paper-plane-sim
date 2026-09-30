@@ -45,11 +45,13 @@ interface Props {
   /** Nose-up (+) or nose-down (-) pitching coefficient. */
   cm: number;
   labels: { lift: string; drag: string; weight: string };
+  /** The buttons to look from other sides; off, it stays as it is first seen. */
+  views?: boolean;
 }
 
 const VIEWS: ReadonlyArray<readonly [string, Vec3]> = [
   // Nose toward you and to the left, as on the folding screen.
-  ['비스듬히', [0.62, 0.42, -0.72]],
+  ['비스듬히', [0.62, 0.14, -0.78]],
   ['옆에서', [0.02, 0.05, -1]],
   ['앞에서', [1, 0.12, 0.001]],
   ['위에서', [0.001, 1, -0.02]],
@@ -62,8 +64,8 @@ export function Tunnel3D(props: Props) {
   const live = useRef(props);
   live.current = props;
   const api = useRef<{ view(dir: Vec3): void; rebuild(): void; pose(): void } | null>(null);
-  // From the side the climb and the glide read at their true angles.
-  const [viewName, setViewName] = useState('옆에서');
+  // Seen at a slant, nose toward you and to the left, as on the folding screen: one view, always the same.
+  const [viewName, setViewName] = useState('비스듬히');
 
   useEffect(() => {
     const mount = mountRef.current!;
@@ -98,6 +100,7 @@ export function Tunnel3D(props: Props) {
     let reach = 0.12;
     let specks: { path: THREE.Vector3[]; phase: number }[] = [];
     let points: THREE.Points | null = null;
+    let lastAir = '';
 
     const clear = (g: THREE.Group) => {
       for (const c of [...g.children]) {
@@ -126,7 +129,7 @@ export function Tunnel3D(props: Props) {
     const pose = () => {
       const p = live.current;
       const { af } = p;
-      clear(forces); clear(air);
+      clear(forces);
       const finite = (v: number | undefined) => (v !== undefined && Number.isFinite(v) ? v : 0);
       const bank = finite(p.bank);
       const gamma = finite(p.gamma);
@@ -149,7 +152,12 @@ export function Tunnel3D(props: Props) {
       tips.drag = arrow(new THREE.Vector3(-1, 0, 0), finite(p.drag) * 4, 0xf59e0b);
       tips.weight = arrow(new THREE.Vector3(-Math.sin(gamma), -Math.cos(gamma), 0), p.weight, 0xef4444);
 
-      // The air: rows of specks across the span and above and below it.
+      // The air: rows of specks across the span and above and below it - made
+      // again only when it would look different, not at every moment of a replay.
+      const airKey = `${Math.round(finite(p.cl) * 20)}|${p.stalled}|${reach}`;
+      if (airKey === lastAir) return;
+      lastAir = airKey;
+      clear(air);
       const half = af.span / 2;
       const cl = finite(p.cl);
       const down = Math.max(-0.45, Math.min(0.45, cl * 0.22));
@@ -206,7 +214,7 @@ export function Tunnel3D(props: Props) {
     };
     api.current = { view, rebuild, pose };
     rebuild();
-    view(VIEWS[1]![1]);
+    view(VIEWS[0]![1]);
 
     const resize = () => {
       const w = mount.clientWidth;
@@ -300,12 +308,12 @@ export function Tunnel3D(props: Props) {
           </span>
         )}
       </div>
-      <div className="flight-choices tunnel3d-views">
+      {props.views !== false && <div className="flight-choices tunnel3d-views">
         {VIEWS.map(([name, dir]) => (
           <button key={name} className={viewName === name ? 'on' : ''}
             onClick={() => { setViewName(name); api.current?.view(dir); }}>{name}</button>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }

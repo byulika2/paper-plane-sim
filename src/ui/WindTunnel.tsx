@@ -17,10 +17,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Tunnel3D } from './Tunnel3D.js';
 import type { Airframe } from '../aero/airframe.js';
-import { forcesAt } from '../aero/flight.js';
-import type { AeroModel, Flight } from '../aero/flight.js';
+import { fly, forcesAt } from '../aero/flight.js';
+import type { AeroModel, Launch } from '../aero/flight.js';
+import { throwsAround } from './flightStats.js';
 import type { RenderFace } from '../origami/space.js';
-import { PHASE_COLOURS, PHASE_NAMES, PHASE_TIPS, phaseAt, pointAt } from './flightPhase.js';
+import { PHASE_COLOURS, PHASE_NAMES, PHASE_TIPS, momentAt, phaseAt } from './flightPhase.js';
 import { FlightScene3D } from './FlightScene3D.js';
 import type { Phase } from './flightPhase.js';
 
@@ -32,24 +33,34 @@ interface Props {
   elevatorDeg: number;
   /** Wings set in a V, degrees, drawn on the front view. */
   vee: number;
-  /** The throw to follow; null while the hundred are still being thrown. */
-  flight: Flight | null;
+  /** The throw as it is set now: each 재생 from the start throws it once more, into air a little different each time. */
+  launch: Launch;
 }
 
 const G = 9.81;
 const grams = (n: number) => (n / G) * 1000;
 const deg = (r: number) => (r * 180) / Math.PI;
 
-export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, flight }: Props) {
+export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, launch }: Props) {
   const de = (elevatorDeg * Math.PI) / 180;
   const weight = af.mass.mass * G;
   const [t, setT] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [slow, setSlow] = useState(false);
-  const total = flight?.time ?? 0;
+  /*
+   * One throw, flown here and now with the throw as it is set: change the
+   * angle and the next throw leaves at it. A new seed is new air - the same
+   * little gusts and lifts the hundred are thrown into, drawn afresh - so
+   * every throw goes its own way.
+   */
+  const [seed, setSeed] = useState(1);
+  const flight = useMemo(() => fly(af, m, throwsAround(launch, 1, seed)[0]!, 0.004), [af, m, launch, seed]);
+  const total = flight.time;
+  const playNext = useRef(false);
+  const throwAgain = () => { playNext.current = true; setSeed((x) => (x * 7919 + 104729) % 2147483647 || 1); };
 
-  // A new throw starts from the hand.
-  useEffect(() => { setT(0); setPlaying(false); }, [flight]);
+  // A new throw starts from the hand, flying if it was thrown to be watched.
+  useEffect(() => { setT(0); setPlaying(playNext.current); playNext.current = false; }, [flight]);
 
   // Playing: time runs on at the flight's own pace, or a quarter of it.
   const rate = useRef(1);
@@ -72,7 +83,7 @@ export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, flight }: Props
     return () => cancelAnimationFrame(raf);
   }, [playing, flight, total]);
 
-  const moment = useMemo(() => (flight ? pointAt(flight.path, t) : null), [flight, t]);
+  const moment = useMemo(() => (flight ? momentAt(flight.path, t) : null), [flight, t]);
 
   if (!flight || !moment) {
     return <div className="tunnel"><p className="flight-hint">100번 던지는 중이에요. 끝나면 평균에 가장 가까운 한 번을 따라가 볼 수 있어요.</p></div>;
@@ -91,15 +102,19 @@ export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, flight }: Props
 
   return (
     <div className="tunnel">
-      <div className="tunnel-phase" style={{ borderColor: PHASE_COLOURS[phase] }}>
-        <b style={{ color: PHASE_COLOURS[phase] }}>{PHASE_NAMES[phase]}</b>
-        <span>{PHASE_TIPS[phase]}</span>
-      </div>
 
-      <div className="tunnel-row">
+      {/* The room fills the screen; the aeroplane close up sits in its corner, the numbers above it. */}
+      <div className="sim-stage">
         <FlightScene3D af={af} drawPlies={drawPlies} vee={vee} flight={flight} t={t} colours={PHASE_COLOURS} />
 
-        <Tunnel3D af={af} drawPlies={drawPlies} alpha={alpha} bank={bank} gamma={gamma} airSpeed={speed}
+        <div className="sim-inset">
+        {/*
+          * The model in a tunnel, seen level: the air straight at it, the model
+          * turning on its centre of gravity to its angle of attack as the lift
+          * comes and goes. Where it is heading and how it is banked are the
+          * room's to show.
+          */}
+        <Tunnel3D views={false} af={af} drawPlies={drawPlies} alpha={alpha} bank={0} gamma={0} airSpeed={speed}
           vee={vee} cl={f.cl} stalled={f.stalled}
           lift={Math.max(0, lift)} drag={drag} weight={weight} cm={f.cm}
           labels={{
@@ -107,8 +122,9 @@ export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, flight }: Props
             drag: `항력 ${grams(drag).toFixed(1)}g`,
             weight: `무게 ${grams(weight).toFixed(1)}g`,
           }} />
+        </div>
 
-        <dl className="tunnel-facts">
+        <dl className="tunnel-facts sim-facts">
           <dt>높이</dt><dd>{moment.h.toFixed(1)}m</dd>
           <dt>바람 (비행 속도)</dt><dd>초속 {speed.toFixed(1)}m · 시속 {Math.round(speed * 3.6)}km</dd>
           <dt>날개 각도 (받음각)</dt><dd>{deg(alpha).toFixed(1)}°</dd>
@@ -122,20 +138,25 @@ export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, flight }: Props
       </div>
 
       <div className="tunnel-controls">
-        <div className="flight-choices">
-          <button onClick={() => { if (t >= total) setT(0); setPlaying(!playing); }}>{playing ? '❚❚ 멈춤' : '▶ 재생'}</button>
-          <button className={slow ? 'on' : ''} onClick={() => setSlow(!slow)}>느리게 (¼배)</button>
-          <button onClick={() => { setPlaying(false); setT(0); }}>처음으로</button>
-        </div>
-        <label>
-          시간 <b>{t.toFixed(1)}초</b> / {total.toFixed(1)}초
-          <input type="range" min={0} max={total} step={0.02} value={t}
-            onChange={(e) => { setPlaying(false); setT(Number(e.target.value)); }} />
-        </label>
         <div className="tunnel-legend">
           {(Object.keys(PHASE_NAMES) as Phase[]).map((k) => (
-            <span key={k}><i style={{ background: PHASE_COLOURS[k] }} />{PHASE_NAMES[k]}</span>
+            <span key={k} className={k === phase ? 'now' : ''} title={PHASE_TIPS[k]}><i style={{ background: PHASE_COLOURS[k] }} />{PHASE_NAMES[k]}</span>
           ))}
+        </div>
+        <div className="tunnel-player">
+          <div className="flight-choices">
+            <button onClick={() => {
+              if (playing) { setPlaying(false); return; }
+              // From the start, or run out: throw it again. Paused part way: go on.
+              if (t <= 0 || t >= total) throwAgain(); else setPlaying(true);
+            }}>{playing ? '❚❚ 멈춤' : t > 0 && t < total ? '▶ 이어서' : '✈ 던지기'}</button>
+            <button onClick={throwAgain}>↻ 새로 던지기</button>
+            <button className={slow ? 'on' : ''} onClick={() => setSlow(!slow)}>느리게 (¼배)</button>
+            <button onClick={() => { setPlaying(false); setT(0); }}>처음으로</button>
+          </div>
+          <span className="tunnel-time"><b>{t.toFixed(1)}초</b> / {total.toFixed(1)}초</span>
+          <input type="range" min={0} max={total} step={0.02} value={t} aria-label="시간"
+            onChange={(e) => { setPlaying(false); setT(Number(e.target.value)); }} />
         </div>
       </div>
     </div>

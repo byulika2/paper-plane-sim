@@ -12,7 +12,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { Airframe } from '../aero/airframe.js';
 import type { Flight, FlightPoint } from '../aero/flight.js';
 import type { RenderFace } from '../origami/space.js';
-import { phaseAt, pointAt } from './flightPhase.js';
+import { momentAt, phaseAt, pointAt } from './flightPhase.js';
 import type { Phase } from './flightPhase.js';
 import { planeMeshes } from './planeMesh.js';
 
@@ -128,8 +128,8 @@ export function FlightScene3D({ af, drawPlies, vee, flight, t, colours }: Props)
     const tick = () => {
       raf = requestAnimationFrame(tick);
       const now = live.current.t;
-      const p = pointAt(pts, now);
-      const i = Math.max(0, pts.indexOf(p));
+      const p = momentAt(pts, now);
+      const i = Math.max(0, pts.indexOf(pointAt(pts, now)));
       const where = at(p);
       plane.position.copy(where);
       plane.quaternion.copy(attitude(p));

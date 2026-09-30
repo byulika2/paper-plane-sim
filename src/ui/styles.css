@@ -876,13 +876,29 @@ input.scrub:hover { border-color: color-mix(in srgb, var(--accent) 55%, transpar
 
 /* The wind tunnel. */
 .tunnel { display: flex; flex-direction: column; gap: 12px; }
-/* The room, the aeroplane close up and the numbers, side by side: one moment three ways. */
-.tunnel-row { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) 250px; gap: 12px; align-items: stretch; }
-.tunnel-row .flight-scene-stage, .tunnel-row .tunnel3d-stage { height: max(340px, calc(100vh - 360px)); }
-.tunnel-row .tunnel-facts { grid-column: auto; }
-@media (max-width: 1100px) { .tunnel-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .tunnel-row .tunnel-facts { grid-column: 1 / -1; } }
-@media (max-width: 760px) { .tunnel-row { grid-template-columns: 1fr; } }
-.tunnel-controls { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: end; }
+/* The room on the left, as big as the screen allows; on the right the numbers, and under them the aeroplane close up. */
+.sim-stage { display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-rows: minmax(0, 1fr) auto; gap: 12px;
+  height: max(480px, calc(100vh - 230px)); }
+.sim-stage .flight-scene { grid-column: 1; grid-row: 1 / 3; min-height: 0; }
+.sim-stage .flight-scene-stage { flex: 1 1 auto; height: auto; min-height: 0; border: 1px solid var(--line); }
+.sim-facts { grid-column: 2; grid-row: 1; align-self: start; max-height: 100%; overflow: auto;
+  grid-template-columns: 7.5em 1fr; font-size: 13px; }
+.sim-facts dd { word-break: keep-all; }
+.sim-inset { grid-column: 2; grid-row: 2; min-width: 0; }
+.sim-inset .tunnel3d-stage { height: 250px; }
+.sim-inset .tunnel3d-note { display: none; }
+.sim-inset .tunnel3d-views button { padding: 3px 8px; font-size: 12px; }
+@media (max-width: 900px) {
+  .sim-stage { display: flex; flex-direction: column; height: auto; }
+  .sim-stage .flight-scene-stage { height: 360px; flex: none; }
+}
+/* Under the room: which colour is which part, then the player on one line. */
+.tunnel-player { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tunnel-player .flight-choices { flex: none; }
+.tunnel-player .tunnel-time { flex: none; font-size: 13px; color: var(--dim); min-width: 8.5em; }
+.tunnel-player .tunnel-time b { color: var(--ink); font-size: 15px; }
+.tunnel-player input[type="range"] { flex: 1 1 240px; }
+.tunnel-controls { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
 .tunnel-controls label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--dim); min-width: 220px; flex: 1 1 220px; }
 .tunnel-controls label b { color: var(--ink); font-size: 14px; }
 .flight-scene { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -894,6 +910,7 @@ input.scrub:hover { border-color: color-mix(in srgb, var(--accent) 55%, transpar
 .tunnel-phase span { font-size: 12px; color: var(--dim); }
 .tunnel-path { flex: 1 1 320px; max-width: 420px; background: var(--panel); border-radius: 6px; }
 .tunnel-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--dim); }
+.tunnel-legend .now { color: var(--ink); font-weight: 700; }
 .tunnel-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
 .tunnel-controls .link { padding: 4px 10px; font-size: 12px; background: none; color: var(--accent);
   border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }

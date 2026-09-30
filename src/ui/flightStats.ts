@@ -46,8 +46,8 @@ function random(seed: number) {
 }
 
 /** The chosen throw, repeated into slightly different air: the same list every time. */
-export function throwsAround(launch: Launch, n: number): Launch[] {
-  const next = random(SEED);
+export function throwsAround(launch: Launch, n: number, seed = SEED): Launch[] {
+  const next = random(seed);
   const normal = () => {
     const u = Math.max(1e-9, next());
     const v = next();

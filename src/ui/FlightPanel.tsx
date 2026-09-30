@@ -13,7 +13,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PlaneSpec } from '../aero/spec.js';
-import type { Flight } from '../aero/flight.js';
 import type { RenderFace } from '../origami/space.js';
 import type { PaperProps } from '../paper/stock.js';
 import { elevatorRiseMm } from './elevator.js';
@@ -126,78 +125,6 @@ function Slider({ value, min, max, step, onChange }: {
   );
 }
 
-/** The flight from the side, to scale, with the ground and a metre grid. */
-function PathChart({ flight, height, others = [], grip = 'over' }: {
-  flight: Flight; height: number; others?: readonly Flight['path'][]; grip?: 'over' | 'under';
-}) {
-  const W = 560;
-  const H = 220;
-  const pad = 26;
-  const xs = flight.path.map((p) => p.x);
-  const end = flight.path[flight.path.length - 1]!;
-  // Which way it went: the one throwing faces that way, with room behind them.
-  const dir = end.x < 0 ? -1 : 1;
-  const minX = Math.min(dir > 0 ? -0.6 : -1, ...xs);
-  const maxX = Math.max(dir > 0 ? 1 : 0.6, ...xs);
-  const maxH = Math.max(height, flight.maxHeight, ...others.map((o) => Math.max(0, ...o.map((q) => q.h))), 1) * 1.15;
-  // One scale for both, so a climb looks like a climb.
-  const k = Math.min((W - 2 * pad) / (maxX - minX), (H - 2 * pad) / maxH);
-  const px = (x: number) => pad + (x - minX) * k;
-  const py = (h: number) => H - pad - h * k;
-  const d = flight.path.map((p, i) => `${i ? 'L' : 'M'}${px(p.x).toFixed(1)},${py(p.h).toFixed(1)}`).join(' ');
-  /*
-   * Metre marks far enough apart to read. A tall climb shrinks the scale, and
-   * a mark every metre then ran its labels into each other.
-   */
-  const grid = [1, 2, 5, 10, 20, 50].find((g) => g * k >= 34) ?? 100;
-  const ticks: number[] = [];
-  for (let m = Math.ceil(minX / grid) * grid; m <= maxX; m += grid) ticks.push(m);
-  const before = flight.path[Math.max(0, flight.path.length - 4)]!;
-  // The plane as it comes down: nose along its last stretch of path.
-  const landAngle = (Math.atan2(-(py(end.h) - py(before.h)), px(end.x) - px(before.x)) * 180) / Math.PI;
-
-  /*
-   * The one throwing, to the same scale as the flight, facing the way it goes:
-   * the hand that lets go is where the path begins - over the head for an
-   * overhand throw, out in front of the face for an underhand one.
-   */
-  const P = (x: number, h: number) => `${px(x * dir).toFixed(1)},${py(h).toFixed(1)}`;
-  const shoulder: [number, number] = [-0.12, 1.42];
-  const elbow: [number, number] = grip === 'over' ? [-0.2, 1.8] : [0.05, 1.3];
-  const person = (
-    <g className="thrower">
-      <circle cx={px(-0.12 * dir)} cy={py(1.6)} r={Math.max(2.5, 0.11 * k)} />
-      <polyline points={`${P(-0.25, 0)} ${P(-0.12, 0.9)} ${P(0.05, 0)}`} />
-      <line x1={px(-0.12 * dir)} y1={py(0.9)} x2={px(shoulder[0] * dir)} y2={py(shoulder[1])} />
-      <polyline points={`${P(shoulder[0], shoulder[1])} ${P(elbow[0], elbow[1])} ${P(0, height)}`} />
-      <polyline points={`${P(shoulder[0], shoulder[1])} ${P(-0.02, 1.1)} ${P(0.12, 1.2)}`} />
-    </g>
-  );
-  return (
-    <svg className="flight-chart" viewBox={`0 0 ${W} ${H}`} role="img"
-      aria-label={`옆에서 본 비행 경로, ${flight.distance.toFixed(1)}미터`}>
-      {ticks.map((m) => (
-        <g key={m}>
-          <line x1={px(m)} x2={px(m)} y1={pad / 2} y2={H - pad} className="grid" />
-          <text x={px(m)} y={H - 8} textAnchor="middle">{m}m</text>
-        </g>
-      ))}
-      <line x1={0} x2={W} y1={py(0)} y2={py(0)} className="ground" />
-      {person}
-      {others.map((o, i) => (
-        <path key={i} className="path faint"
-          d={o.map((p, j) => `${j ? 'L' : 'M'}${px(Math.max(minX, Math.min(maxX, p.x))).toFixed(1)},${py(p.h).toFixed(1)}`).join(' ')} />
-      ))}
-      <path d={d} className="path" />
-      {/* Where it came down: a paper plane, nose first. */}
-      <g className="landing" transform={`translate(${px(end.x).toFixed(1)},${(py(0) - 5).toFixed(1)}) rotate(${(-landAngle).toFixed(1)})`}>
-        <path d="M9,0 L-7,-6 L-3,0 L-7,6 Z" />
-        <path d="M9,0 L-3,0" className="landing-fold" />
-      </g>
-    </svg>
-  );
-}
-
 function Meter({ value, label, tone }: { value: number; label: string; tone: 'good' | 'warn' | 'bad' }) {
   return (
     <div className={`flight-meter ${tone}`}>
@@ -239,7 +166,7 @@ function FlightField({
   const report = useMemo(
     () => flightReport(base, spec, paper, settings), [base, spec, paper, settings]);
   const {
-    speed, angle, height, cgInput, elevator, clips,
+    speed, angle, cgInput, elevator, clips,
   } = settings;
   const grip = settings.grip ?? 'over';
   const set = (patch: Partial<FlightSettings>) => onSettings({ ...settings, ...patch });
@@ -472,17 +399,18 @@ function FlightField({
         {view === 'tunnel' ? (
           <section className="flight-results flight-tunnel-view">
             <WindTunnel af={af} m={m} drawPlies={shownPlies ?? plies}
-              elevatorDeg={elevator} vee={vee} flight={shown?.nearMean ?? null} />
+              elevatorDeg={elevator} vee={vee} launch={launch} />
           </section>
         ) : (
         <section className="flight-results">
           <div className="flight-throws">
-              <p className="flight-hint">
-                {(settings.gust ?? 1) === 1 ? '실내' : '야외'}에서 {throwsN}번 던진 결과예요.
-                {stale && done === null && <b className="stale"> · 값을 바꿨어요. 위의 ‘다시 계산’을 누르면 새 값으로 계산해요.</b>}
-                {done !== null && <b className="computing"> · {done}/{throwsN}번 던지는 중…</b>}
-              </p>
-              <PathChart flight={shown?.typical ?? flight} height={height} others={shown?.others ?? []} grip={grip} />
+              {/* The flight itself is seen in the simulator; here only the numbers, and what is still being worked out. */}
+              {((stale && done === null) || done !== null) && (
+                <p className="flight-hint">
+                  {stale && done === null && <b className="stale">값을 바꿨어요. 위의 ‘다시 계산’을 누르면 새 값으로 계산해요.</b>}
+                  {done !== null && <b className="computing">{done}/{throwsN}번 던지는 중…</b>}
+                </p>
+              )}
               {shown ? (
                 <>
                   <div className="flight-big">
