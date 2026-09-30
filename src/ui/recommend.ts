@@ -13,8 +13,7 @@
  * record keeps only what the pupil set.
  */
 
-import type { Airframe } from '../aero/airframe.js';
-import type { RenderFace } from '../origami/space.js';
+import type { PlaneSpec } from '../aero/spec.js';
 import type { PaperProps } from '../paper/stock.js';
 import { defaultElevator } from './elevator.js';
 import type { ElevatorTune } from './elevator.js';
@@ -33,7 +32,7 @@ import { fly } from '../aero/flight.js';
  * own.
  */
 const SCREEN_THROWS = 30;
-const SCREEN_DT = 0.008;
+const SCREEN_DT = 0.016;
 const FINAL_THROWS = 100;
 const FINALISTS = 5;
 /*
@@ -57,13 +56,13 @@ const STEEP = 15;
 const regionOf = (t: ElevatorTune) => ({ y0: t.fromCm / 100, y1: (t.fromCm + t.widthCm) / 100, depth: t.depthCm / 100 });
 
 function screen(
-  af: Airframe, plies: readonly RenderFace[], paper: PaperProps, settings: FlightSettings, widthCm: number,
+  spec: PlaneSpec, paper: PaperProps, settings: FlightSettings, widthCm: number,
 ): { tune: ElevatorTune; time: number; flies: boolean }[] {
   const start = { ...defaultElevator(0), widthCm };
   const region = regionOf(start);
-  const base = flightBase(af, plies, region);
+  const base = flightBase(spec, region);
   // The elevator only changes the launch, so the aeroplane is set up once.
-  const { af: flown, m, launch } = flightReport(base, af, plies, paper, { ...settings, region, elevator: 0 });
+  const { af: flown, m, launch } = flightReport(base, spec, paper, { ...settings, region, elevator: 0 });
   const air = throwsAround(launch, SCREEN_THROWS);
   const tried = new Map<number, { time: number; flies: boolean }>();
   const judge = (deg: number) => {
@@ -91,9 +90,9 @@ function screen(
  * The plane's average time aloft with this elevator, over the throws its
  * score comes from, and whether enough of them came level to count as flying.
  */
-function finalTime(af: Airframe, plies: readonly RenderFace[], paper: PaperProps, settings: FlightSettings, tune: ElevatorTune) {
+function finalTime(spec: PlaneSpec, paper: PaperProps, settings: FlightSettings, tune: ElevatorTune) {
   const region = regionOf(tune);
-  const rep = flightReport(flightBase(af, plies, region), af, plies, paper, { ...settings, region, elevator: tune.angleDeg });
+  const rep = flightReport(flightBase(spec, region), spec, paper, { ...settings, region, elevator: tune.angleDeg });
   const results = runThrows(rep.af, rep.m, throwsAround(rep.launch, FINAL_THROWS), 0, FINAL_THROWS);
   const n = Math.max(1, results.length);
   return {
@@ -117,33 +116,33 @@ const known = new Map<string, Judged>();
  * `current` is the elevator it has now, which the answer must beat to replace.
  */
 export function recommendElevator(
-  af: Airframe, plies: readonly RenderFace[], paper: PaperProps, settings: FlightSettings,
+  spec: PlaneSpec, paper: PaperProps, settings: FlightSettings,
   key?: string, current?: ElevatorTune,
 ): ElevatorTune {
-  return recommendElevatorTimed(af, plies, paper, settings, key, current).tune;
+  return recommendElevatorTimed(spec, paper, settings, key, current).tune;
 }
 
 /** The same, with the average time aloft it gives over the hundred throws. */
 export function recommendElevatorTimed(
-  af: Airframe, plies: readonly RenderFace[], paper: PaperProps, settings: FlightSettings,
+  spec: PlaneSpec, paper: PaperProps, settings: FlightSettings,
   key?: string, current?: ElevatorTune,
 ): Judged {
   const hit = key ? known.get(key) : undefined;
   if (hit) return hit;
-  let tried = screen(af, plies, paper, settings, WIDTHS[0]);
+  let tried = screen(spec, paper, settings, WIDTHS[0]);
   // Flying settings first, then the longer: the order the finalists are taken in.
   const rank = (x: { time: number; flies: boolean }, y: { time: number; flies: boolean }) => (Number(y.flies) - Number(x.flies)) || (y.time - x.time);
   const steep = (list: typeof tried) => Math.abs([...list].sort(rank)[0]!.tune.angleDeg) >= STEEP;
   for (const w of WIDTHS.slice(1)) {
     if (!steep(tried)) break;
-    tried = [...tried, ...screen(af, plies, paper, settings, w)];
+    tried = [...tried, ...screen(spec, paper, settings, w)];
   }
   // The plane's own elevator first: a newcomer has to fly longer to replace it, not as long.
   // The same bend twice is flown once.
   const seen = new Set<string>();
   const finalists = [...(current ? [current] : []), ...[...tried].sort(rank).slice(0, FINALISTS).map((c) => c.tune)]
     .filter((t) => { const k = `${t.fromCm},${t.widthCm},${t.depthCm},${t.angleDeg}`; if (seen.has(k)) return false; seen.add(k); return true; });
-  const out = longest(finalists.map((tune) => ({ tune, ...finalTime(af, plies, paper, settings, tune) })));
+  const out = longest(finalists.map((tune) => ({ tune, ...finalTime(spec, paper, settings, tune) })));
   if (key) {
     if (known.size > 40) known.clear();
     known.set(key, out);

@@ -42,6 +42,7 @@ import { applyRigid } from '../geometry/math.js';
 import type { Vec2 } from '../geometry/math.js';
 import { buildAirframe } from '../aero/airframe.js';
 import type { RenderFace } from '../origami/space.js';
+import type { FoldEdge } from '../aero/spec.js';
 // Aliased: `Pick` is also a TypeScript built-in, used further down this file.
 import type { Pick as AlignPick, Segment } from '../geometry/constructions.js';
 import type { PaperProps } from '../paper/stock.js';
@@ -362,25 +363,45 @@ export function rollLength(
   plies: readonly RenderFace[],
   paper: PaperProps,
 ): { extra: number; band: number } {
-  const none = { extra: 0, band: 0 };
-  if (plies.length < 2) return none;
+  let extra = 0;
+  let band = 0;
+  let front = -Infinity;
+  for (const e of foldEdges(steps, session, pitch, plies, paper)) {
+    if (!e.roll) continue;
+    extra += WRAP * (Math.PI / 2) * pitch * e.plies;
+    if (e.x > front) { front = e.x; band = e.depth; }
+  }
+  return { extra, band };
+}
+
+/**
+ * Every fold of the record that was closed on paper, where it lies on the
+ * finished aeroplane `plies`: across it or along it, how far back from the
+ * nose, how many plies it carried over and how round it turns. A roll is one
+ * closed flat across the aeroplane in the front of it.
+ */
+export function foldEdges(
+  steps: readonly Step[],
+  session: Pick<SessionState, 'carried' | 'stepCreases'>,
+  pitch: number,
+  plies: readonly RenderFace[],
+  paper: PaperProps,
+): FoldEdge[] {
+  if (plies.length < 2) return [];
   const af = buildAirframe(plies, paper, 8);
-  if (!(af.length > 0)) return none;
+  if (!(af.length > 0)) return [];
   const inSpace = (q: Vec2) => {
     const f = plies.find((ply) => pointInPolygon(ply.outline, q));
     return f ? af.frame.toBody(applyRigid(f.transform, [q[0], q[1], 0])) : null;
   };
-  let extra = 0;
-  let band = 0;
-  let front = -Infinity;
+  const out: FoldEdge[] = [];
   steps.forEach((s, i) => {
-    if (!isFold(s) || s.creaseOnly || (s.angleDeg ?? 180) < 179.5) return;
+    if (!isFold(s) || s.creaseOnly) return;
     const c = session.carried[i];
     if (!c || !(c.plies > 0)) return;
     // The longest piece of its crease, found on the finished aeroplane.
-    const pieces = [...(session.stepCreases[i] ?? [])]
-      .sort((p, q) => Math.hypot(q.b[0] - q.a[0], q.b[1] - q.a[1]) - Math.hypot(p.b[0] - p.a[0], p.b[1] - p.a[1]));
-    const piece = pieces[0];
+    const piece = [...(session.stepCreases[i] ?? [])]
+      .sort((p, q) => Math.hypot(q.b[0] - q.a[0], q.b[1] - q.a[1]) - Math.hypot(p.b[0] - p.a[0], p.b[1] - p.a[1]))[0];
     if (!piece) return;
     // A hair inside each end, so the point is on a face and not on its edge.
     const at = (t: number): Vec2 => [piece.a[0] + (piece.b[0] - piece.a[0]) * t, piece.a[1] + (piece.b[1] - piece.a[1]) * t];
@@ -389,13 +410,17 @@ export function rollLength(
     if (!p || !q) return;
     const run = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
     const len = Math.hypot(run[0]!, run[1]!, run[2]!);
+    if (!(len > 0)) return;
     const x = (p[0] + q[0]) / 2;
-    if (!(len > 0) || Math.abs(run[0]!) / len > 0.5) return;
-    if (af.cgFromNose - x > NOSE_SHARE * af.length) return;
-    extra += WRAP * (Math.PI / 2) * pitch * c.plies;
-    if (x > front) { front = x; band = c.depth; }
+    const angleDeg = s.angleDeg ?? 180;
+    const across = Math.abs(run[0]!) / len <= 0.5;
+    out.push({
+      step: i, angleDeg, plies: c.plies, depth: c.depth, x, across,
+      radius: (c.plies * pitch) / 2,
+      roll: across && angleDeg >= 179.5 && af.cgFromNose - x <= NOSE_SHARE * af.length,
+    });
   });
-  return { extra, band };
+  return out;
 }
 
 /**

@@ -12,7 +12,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Airframe } from '../aero/airframe.js';
+import type { PlaneSpec } from '../aero/spec.js';
 import type { Flight } from '../aero/flight.js';
 import type { RenderFace } from '../origami/space.js';
 import type { PaperProps } from '../paper/stock.js';
@@ -28,7 +28,9 @@ import type { FlightStats, ThrowResult } from './flightStats.js';
 import { WindTunnel } from './WindTunnel.js';
 
 interface Props {
-  airframe: Airframe;
+  /** The measured plane it flies (see `measurePlane`). */
+  spec: PlaneSpec;
+  /** The folded model, for drawing only. */
   plies: readonly RenderFace[];
   paper: PaperProps;
   /** The throw, kept by the app so it outlives the screen and reaches the download. */
@@ -211,7 +213,7 @@ function Meter({ value, label, tone }: { value: number; label: string; tone: 'go
  * would be a division by nothing.
  */
 export function FlightPanel(props: Props) {
-  if (!canFly(props.airframe)) {
+  if (!canFly(props.spec.af)) {
     return (
       <div className="flight-overlay">
         <div className="stage-title">
@@ -225,16 +227,17 @@ export function FlightPanel(props: Props) {
 }
 
 function FlightField({
-  airframe, plies, paper, settings, onSettings, shownPlies, elevatorTune, recommended,
+  spec, plies, paper, settings, onSettings, shownPlies, elevatorTune, recommended,
   ownElevator, onElevatorTune, onUseRecommended, onRecompute,
   recommendedAngle,
 }: Props) {
   const r = settings.region;
-  const base = useMemo(() => flightBase(airframe, plies, r),
+  const airframe = spec.af;
+  const base = useMemo(() => flightBase(spec, r),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [airframe, plies, r?.y0, r?.y1, r?.depth]);
+    [spec, r?.y0, r?.y1, r?.depth]);
   const report = useMemo(
-    () => flightReport(base, airframe, plies, paper, settings), [base, airframe, plies, paper, settings]);
+    () => flightReport(base, spec, paper, settings), [base, spec, paper, settings]);
   const {
     speed, angle, height, cgInput, elevator, clips,
   } = settings;
@@ -311,7 +314,7 @@ function FlightField({
         setDone(results.length);
         channel.port2.postMessage(null);
       } else {
-        const out = summarize(results, af, plies, paper);
+        const out = summarize(results, spec, paper);
         keepStats(base.bare, runKey, out);
         setStats({ key: runKey, out });
         setDone(null);
@@ -514,6 +517,10 @@ function FlightField({
             <dt>균형점</dt><dd>코끝에서 {cm(m.neutralFromNose)}cm</dd>
             <dt>날개 넓이</dt><dd>{(af.wingArea * 1e4).toFixed(0)}cm² · 폭 {cm(af.span)}cm</dd>
             <dt>날개가 버티는 무게</dt><dd>100cm²마다 {loading.toFixed(2)}g</dd>
+            <dt>코 두께</dt><dd>{(spec.summary.noseThickness * 1000).toFixed(1)}mm{report.bulge.side > 0 ? ' · 날개 위로 볼록' : report.bulge.side < 0 ? ' · 날개 아래로 볼록' : ''}</dd>
+            <dt>동체 깊이</dt><dd>{cm(spec.summary.keelDepth)}cm</dd>
+            {spec.panels.length > 1 && <dt>날개 꺾임</dt>}
+            {spec.panels.length > 1 && <dd>{spec.panels.map((p) => `${cm(p.from)}~${cm(p.to)}cm ${p.angleDeg}°`).join(' · ')}</dd>}
             {flight.trimSpeed && <dt>혼자 날 때 속도</dt>}
             {flight.trimSpeed && <dd>초속 {flight.trimSpeed.toFixed(1)}m · 1m 내려갈 때 {flight.glideRatio!.toFixed(1)}m 앞으로</dd>}
           </dl>

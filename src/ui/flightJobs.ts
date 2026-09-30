@@ -23,7 +23,7 @@ type Ask = Job extends infer J ? (J extends { id: number } ? Omit<J, 'id'> : nev
  * So a kept answer can be a stale copy of nothing; it is never read for a
  * plane it was not worked out for.
  */
-const CALC_VERSION = 22;
+const CALC_VERSION = 24;
 const STORE_KEY = 'paper-plane.flight-answers.v1';
 const STORE_MAX = 150;
 

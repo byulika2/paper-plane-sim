@@ -71,8 +71,18 @@ export function massProperties(panels: readonly Panel3[], arealDensity: number):
 
   for (const panel of panels) {
     flatArea += panel.area;
-    for (const [a, b, c] of triangles(panel.points)) {
-      const at = triangleArea(a, b, c);
+    /*
+     * Each piece weighs its own paper, however it is drawn: a piece drawn
+     * stretched - the nose longer by what its rolls did not take in - still
+     * has the sheet's paper in it, spread over the longer shape. Weighed by
+     * its drawn area, the stretched aeroplane came out 3% heavier than the
+     * sheet it was folded from.
+     */
+    const tris = triangles(panel.points);
+    const drawn = tris.reduce((sum, [a, b, c]) => sum + triangleArea(a, b, c), 0);
+    const spread = drawn > 1e-14 && panel.area > 0 ? panel.area / drawn : 1;
+    for (const [a, b, c] of tris) {
+      const at = triangleArea(a, b, c) * spread;
       if (at < 1e-14) continue;
       area += at;
       const centroid: Vec3 = [

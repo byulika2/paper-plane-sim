@@ -21,9 +21,9 @@ import type { Airframe } from './airframe.js';
 import { buildSystem, freestream, RHO, solve } from './vlm.js';
 import type { LatticePanel } from './vlm.js';
 import type { PaperProps } from '../paper/stock.js';
-import { foldedPitchOf } from '../paper/stock.js';
-import type { RenderFace } from '../origami/space.js';
-import { sub, unit } from '../geometry/math.js';
+import { CELL } from './spec.js';
+import type { PlaneSpec } from './spec.js';
+import { unit } from '../geometry/math.js';
 import type { Vec3 } from '../geometry/math.js';
 
 const G = 9.81;
@@ -678,36 +678,15 @@ export function fly(af: Airframe, m: AeroModel, launch: Launch, dt = 0.004): Fli
  * The steps where a flap ends are left out: a tenth of a millimetre under a
  * boundary layer some millimetres thick costs next to nothing.
  */
-export function thicknessFormFactor(af: Airframe, plies: readonly RenderFace[]): { tc: number; ff: number } {
-  const plyArea = plies.reduce((a, p) => a + p.area, 0);
-  if (plyArea <= 0) return { tc: 0, ff: 1 };
-  // A folded ply's height in the stack, air and all, from the paper's weight per area.
-  const caliper = foldedPitchOf((af.mass.mass / plyArea) * 1000);
-  const outlines = plies.map((p) => p.points.map(af.frame.toBody));
-  const origin = af.frame.toBody([0, 0, 0]);
-  const lifting = outlines.filter((_, i) =>
-    Math.abs(unit(sub(af.frame.toBody(plies[i]!.normal), origin))[2]) >= 0.35);
-  const covers = (poly: readonly Vec3[], x: number, yy: number) => {
-    let inside = false;
-    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-      const a = poly[i]!;
-      const b = poly[j]!;
-      if ((a[1] > yy) !== (b[1] > yy)
-        && x < a[0] + ((yy - a[1]) / (b[1] - a[1])) * (b[0] - a[0])) inside = !inside;
-    }
-    return inside;
-  };
-  const st = af.stations.filter((s) => s.y > 0 && s.chord > 1e-4);
+export function thicknessFormFactor(spec: PlaneSpec): { tc: number; ff: number } {
+  const st = spec.sections.filter((s) => s.y > 0 && s.chord > 1e-4);
   if (st.length === 0) return { tc: 0, ff: 1 };
   let weighted = 0;
   let chords = 0;
   for (const s of st) {
     let most = 0;
-    for (let k = 0; k < 24; k++) {
-      const x = s.leading - ((k + 0.5) * s.chord) / 24;
-      most = Math.max(most, lifting.filter((p) => covers(p, x, s.y)).length);
-    }
-    weighted += ((most * caliper) / s.chord) * s.chord;
+    for (const n of s.plies) most = Math.max(most, n);
+    weighted += most * spec.caliper;
     chords += s.chord;
   }
   const tc = chords > 0 ? weighted / chords : 0;
@@ -733,75 +712,18 @@ export interface Bending {
  * - which is why a rolled leading edge holds its shape in a wind that folds a
  * single sheet.
  */
-export function wingBending(
-  af: Airframe, plies: readonly RenderFace[], paper: PaperProps, load: number,
-): Bending {
-  const outlines = plies.map((p) => p.points.map(af.frame.toBody));
-  const origin = af.frame.toBody([0, 0, 0]);
-  const liftingIdx = outlines.map((_, i) => i).filter((i) =>
-    Math.abs(unit(sub(af.frame.toBody(plies[i]!.normal), origin))[2]) >= 0.35);
-  const lifting = liftingIdx.map((i) => outlines[i]!);
-  /*
-   * Which plies bend as one. Plies joined along a fold that runs out along
-   * the span - the rolls of a leading edge, a flap folded over at its root -
-   * cannot slide past each other there, so for bending along the span they
-   * work as one thicker sheet: stiffness goes as its thickness cubed. Plies
-   * merely lying on each other slide, and each bends alone: their stiffness
-   * adds. (Plate theory; there is no glue.) Found from the shape: two plies
-   * are joined where they share a spanwise edge, seen from above.
-   */
-  const parent = lifting.map((_, i) => i);
-  const find = (x: number): number => (parent[x] === x ? x : (parent[x] = find(parent[x]!)));
-  const spanEdges: Array<{ ply: number; a: Vec3; b: Vec3 }> = [];
-  lifting.forEach((poly, k) => {
-    for (let i = 0; i < poly.length; i++) {
-      const a = poly[i]!; const b = poly[(i + 1) % poly.length]!;
-      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-      if (len > 1e-3 && Math.abs(b[1] - a[1]) > 0.9 * len) spanEdges.push({ ply: k, a, b });
-    }
-  });
-  const tol = 3e-4;
-  const same = (p: Vec3, q: Vec3) => Math.abs(p[0] - q[0]) < tol && Math.abs(p[1] - q[1]) < tol;
-  for (let i = 0; i < spanEdges.length; i++) {
-    for (let j = i + 1; j < spanEdges.length; j++) {
-      const e = spanEdges[i]!; const f = spanEdges[j]!;
-      if (e.ply === f.ply) continue;
-      if ((same(e.a, f.a) && same(e.b, f.b)) || (same(e.a, f.b) && same(e.b, f.a))) parent[find(e.ply)] = find(f.ply);
-    }
-  }
-  const covers = (poly: readonly Vec3[], x: number, yy: number) => {
-    let inside = false;
-    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-      const a = poly[i]!;
-      const b = poly[j]!;
-      if ((a[1] > yy) !== (b[1] > yy)
-        && x < a[0] + ((yy - a[1]) / (b[1] - a[1])) * (b[0] - a[0])) inside = !inside;
-    }
-    return inside;
-  };
-  const st = af.stations.filter((s) => s.y > 0).sort((a, b) => a.y - b.y);
+export function wingBending(spec: PlaneSpec, paper: PaperProps, load: number): Bending {
+  const af = spec.af;
+  const st = spec.sections.filter((s) => s.y > 0).sort((a, b) => a.y - b.y);
   if (st.length < 2 || af.wingArea <= 0) return { tipDeflection: 0, share: 0, rootPlies: 0 };
   const D = paper.bendingRigidity;
-  const samples = 24;
-  const stiff: number[] = [];
-  let rootPlies = 0;
-  st.forEach((s, i) => {
-    let ei = 0;
-    let plyTotal = 0;
-    for (let k = 0; k < samples; k++) {
-      const x = s.leading - ((k + 0.5) * s.chord) / samples;
-      const here = lifting.map((p, j) => (covers(p, x, s.y) ? j : -1)).filter((j) => j >= 0);
-      plyTotal += here.length;
-      // Each joined bundle as one sheet of its whole thickness; bundles side by side add.
-      const bundles = new Map<number, number>();
-      for (const j of here) bundles.set(find(j), (bundles.get(find(j)) ?? 0) + 1);
-      let sum = 0;
-      for (const g of bundles.values()) sum += g ** 3;
-      ei += D * sum * (s.chord / samples);
-    }
-    if (i === 0) rootPlies = plyTotal / samples;
-    stiff.push(Math.max(ei, D * s.chord * 1e-3));
+  // Each joined bundle as one sheet of its whole thickness; bundles side by side add (see the map).
+  const stiff = st.map((s) => {
+    let sum = 0;
+    for (const k of s.stiffness) sum += k;
+    return Math.max(D * sum * CELL, D * s.chord * 1e-3);
   });
+  const rootPlies = st[0]!.plies.reduce((a, n) => a + n, 0) / Math.max(1, st[0]!.plies.length);
   // Load per metre of span, shared by chord, for one half wing.
   const half = (load * af.mass.mass * G) / 2;
   const chordSum = st.reduce((a, s) => a + s.chord, 0);
@@ -882,95 +804,55 @@ export interface NoseBulge {
  * found where the paper stacks deepest near the leading edge, and its middle
  * measured against the thin wing behind it: above or below, and by how much.
  */
-/** A flat polygon's height over (x, y), on the plane through its points (Newell's normal). */
-function heightAt(pts: readonly Vec3[], x: number, y: number): number {
-  let nx = 0; let ny = 0; let nz = 0; let cx = 0; let cy = 0; let cz = 0;
-  for (let i = 0; i < pts.length; i++) {
-    const a = pts[i]!;
-    const b = pts[(i + 1) % pts.length]!;
-    nx += (a[1] - b[1]) * (a[2] + b[2]);
-    ny += (a[2] - b[2]) * (a[0] + b[0]);
-    nz += (a[0] - b[0]) * (a[1] + b[1]);
-    cx += a[0]; cy += a[1]; cz += a[2];
-  }
-  const k = pts.length || 1;
-  cx /= k; cy /= k; cz /= k;
-  return Math.abs(nz) > 1e-12 ? cz - (nx * (x - cx) + ny * (y - cy)) / nz : cz;
-}
-
-export function noseBulge(af: Airframe, plies: readonly RenderFace[]): NoseBulge {
+export function noseBulge(spec: PlaneSpec): NoseBulge {
   const flat: NoseBulge = { side: 0, offset: 0, ahead: 0 };
-  const origin = af.frame.toBody([0, 0, 0]);
-  const lying = plies
-    .map((p) => ({ pts: p.points.map(af.frame.toBody), n: unit(sub(af.frame.toBody(p.normal), origin)) }))
-    .filter((p) => Math.abs(p.n[2]) >= 0.9);
-  const covers = (poly: readonly Vec3[], x: number, yy: number) => {
-    let inside = false;
-    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-      const a = poly[i]!;
-      const b = poly[j]!;
-      if ((a[1] > yy) !== (b[1] > yy)
-        && x < a[0] + ((yy - a[1]) / (b[1] - a[1])) * (b[0] - a[0])) inside = !inside;
-    }
-    return inside;
-  };
-  const semi = af.span / 2;
+  const semi = spec.af.span / 2;
   let sum = 0;
   let weight = 0;
   let where = 0;
   const SAMPLES = 30;
   const camberSum = new Array<number>(SAMPLES).fill(0);
   const camberWeight = new Array<number>(SAMPLES).fill(0);
-  for (const s of af.stations) {
+  for (const s of spec.sections) {
     const y = Math.abs(s.y);
     // The wing itself: clear of the keel, short of the tips.
-    if (y < 0.15 * semi || y > 0.7 * semi || s.chord <= 0) continue;
-    const cut: { x: number; k: number; n: number; lo: number; hi: number; hit: typeof lying }[] = [];
-    for (let k = 0; k < SAMPLES; k++) {
-      const x = s.leading - ((k + 0.5) * s.chord) / SAMPLES;
-      const hit = lying.filter((p) => covers(p.pts, x, s.y));
-      if (hit.length === 0) continue;
-      // Each ply's height where the cut crosses it, on its own plane: its
-      // average height, on a wing set at a slant, stood centimetres off.
-      const zs = hit.map((p) => heightAt(p.pts, x, s.y));
-      cut.push({ x, k, n: hit.length, lo: Math.min(...zs), hi: Math.max(...zs), hit });
-    }
-    if (cut.length < 4) continue;
-    const thin = Math.min(...cut.map((c) => c.n));
-    const skin = cut.filter((c) => c.n === thin);
+    if (y < 0.15 * semi || y > 0.7 * semi || s.chord <= 0 || s.x.length < 4) continue;
+    let thin = Infinity;
+    for (const n of s.plies) thin = Math.min(thin, n);
     /*
-     * The thin skin's own line along the chord, fitted through where it is
-     * bare: a wing set at a slant in the model's axes rises toward its nose
-     * by as much as the nose is thick, and measured from the skin's average
-     * height a bulge on top came out underneath.
+     * The bare skin's own line along the chord, fitted where it is one layer
+     * of stack thinner than anywhere else: a wing set at a slant in the
+     * model's axes rises toward its nose by as much as the nose is thick,
+     * and the ply riding up over a stack tilts the skin with it. Measured from
+     * the skin's own line, the stack is on top or underneath by how the skin
+     * runs on under it or over it.
      */
-    const mids = skin.map((c) => [c.x, (c.lo + c.hi) / 2] as const);
-    const mx = mids.reduce((a, q) => a + q[0], 0) / mids.length;
-    const mz = mids.reduce((a, q) => a + q[1], 0) / mids.length;
-    const sxx = mids.reduce((a, q) => a + (q[0] - mx) ** 2, 0);
-    const tilt = sxx > 1e-12 ? mids.reduce((a, q) => a + (q[0] - mx) * (q[1] - mz), 0) / sxx : 0;
-    const skinZ = (x: number) => mz + tilt * (x - mx);
-    for (const c of cut) {
-      camberSum[c.k]! += (skinZ(c.x) - (c.lo + c.hi) / 2) / s.chord * s.chord;
-      camberWeight[c.k]! += s.chord;
+    let n0 = 0; let mx = 0; let mz = 0;
+    for (let k = 0; k < s.x.length; k++) {
+      if (s.plies[k] !== thin) continue;
+      n0++; mx += s.x[k]!; mz += (s.top[k]! + s.bottom[k]!) / 2;
     }
-    /*
-     * Which side the stack is on is read off the skin itself: the ply of the
-     * bare wing nearest the nose, where it runs on under (or over) the stack.
-     * Measured against a line through the bare wing instead, the ply riding
-     * up over a stack tilted that line, and the same nose read as on top on
-     * one plane and underneath on another.
-     */
-    const nearest = skin.reduce((a, c) => (c.x > a.x ? c : a));
-    const skinPly = nearest.hit[0]!;
-    const skinAt = (x: number) => (covers(skinPly.pts, x, s.y) ? heightAt(skinPly.pts, x, s.y) : skinZ(x));
-    for (const c of cut) {
-      if (c.n < thin + 4) continue;
+    if (n0 < 2) continue;
+    mx /= n0; mz /= n0;
+    let sxx = 0; let sxz = 0;
+    for (let k = 0; k < s.x.length; k++) {
+      if (s.plies[k] !== thin) continue;
+      sxx += (s.x[k]! - mx) ** 2; sxz += (s.x[k]! - mx) * ((s.top[k]! + s.bottom[k]!) / 2 - mz);
+    }
+    const tilt = sxx > 1e-12 ? sxz / sxx : 0;
+    const skinAt = (x: number) => mz + tilt * (x - mx);
+    for (let k = 0; k < s.x.length; k++) {
+      const x = s.x[k]!;
+      const mid = (s.top[k]! + s.bottom[k]!) / 2;
+      const bin = Math.min(SAMPLES - 1, Math.max(0, Math.floor(((s.leading - x) / s.chord) * SAMPLES)));
       // Up is -z: a middle above the skin is a bulge on top.
-      const off = skinAt(c.x) - (c.lo + c.hi) / 2;
-      sum += off * c.n;
-      weight += c.n;
-      where += c.x * c.n;
+      camberSum[bin]! += skinAt(x) - mid;
+      camberWeight[bin]! += s.chord;
+      if (s.plies[k]! < thin + 4) continue;
+      const off = skinAt(x) - mid;
+      sum += off * s.plies[k]!;
+      weight += s.plies[k]!;
+      where += x * s.plies[k]!;
     }
   }
   if (weight === 0) return flat;
@@ -988,11 +870,11 @@ export function noseBulge(af: Airframe, plies: readonly RenderFace[]): NoseBulge
    */
   const bare = camber.filter((p) => p[0] >= 0.5);
   if (bare.length >= 2) {
-    const mx = bare.reduce((a, p) => a + p[0], 0) / bare.length;
-    const mz = bare.reduce((a, p) => a + p[1], 0) / bare.length;
-    const sxx = bare.reduce((a, p) => a + (p[0] - mx) ** 2, 0);
-    const slope = sxx > 0 ? bare.reduce((a, p) => a + (p[0] - mx) * (p[1] - mz), 0) / sxx : 0;
-    for (const p of camber) p[1] -= mz + slope * (p[0] - mx);
+    const bx = bare.reduce((a, p) => a + p[0], 0) / bare.length;
+    const bz = bare.reduce((a, p) => a + p[1], 0) / bare.length;
+    const bxx = bare.reduce((a, p) => a + (p[0] - bx) ** 2, 0);
+    const slope = bxx > 0 ? bare.reduce((a, p) => a + (p[0] - bx) * (p[1] - bz), 0) / bxx : 0;
+    for (const p of camber) p[1] -= bz + slope * (p[0] - bx);
   }
   return { side: offset > 0 ? 1 : -1, offset: Math.abs(offset), ahead: where / weight, camber };
 }

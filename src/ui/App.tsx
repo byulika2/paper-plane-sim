@@ -15,7 +15,7 @@ import { ContextMenu } from './ContextMenu.js';
 import type { MenuItem } from './ContextMenu.js';
 import { alignFold } from '../geometry/constructions.js';
 import { senseMark } from './senses.js';
-import { bodyAndWings, cm, foldStats, isFold, keelLines, pickAt, rollLength, PRESETS, replay, snapPoints } from './foldSession.js';
+import { bodyAndWings, cm, foldStats, isFold, keelLines, foldEdges, pickAt, rollLength, PRESETS, replay, snapPoints } from './foldSession.js';
 import type { FoldStep, PatternLine, SnapPoint, Step } from './foldSession.js';
 
 /** What each kind of snap is called, for the line that says what it caught. */
@@ -33,6 +33,7 @@ import { renderFaces, turnedFromViewerAt } from '../origami/space.js';
 import { faceUnder } from '../origami/folding.js';
 import { collapsePattern } from '../origami/collapse.js';
 import { buildAirframe, lengthenNose, noseStretch } from '../aero/airframe.js';
+import { measurePlane } from '../aero/spec.js';
 import { noseBulge } from '../aero/flight.js';
 import { bendElevator, defaultElevator } from './elevator.js';
 import { cardFlightLater, recommendAngleLater, recommendLater, recommendThrowLater } from './flightJobs.js';
@@ -852,23 +853,23 @@ export function App() {
    * flies, or the flying screen and the list's card fly different planes.
    */
   // The rolls' real paper, as the list's card counts it: one plane, one set of numbers.
-  const restPlies = useMemo(() => {
+  // Measured once, as the list's card measures it: the flight is worked out on the measurements.
+  const { restPlies, restSpec } = useMemo(() => {
     const drawn = renderFaces(session.state, -1, paper.foldedPitch);
     const roll = rollLength(steps, session, paper.foldedPitch, drawn, paper);
-    return lengthenNose(drawn, paper, roll.extra, roll.band);
+    const plies = lengthenNose(drawn, paper, roll.extra, roll.band);
+    const spec = measurePlane(plies, paper, paper.foldedPitch, foldEdges(steps, session, paper.foldedPitch, drawn, paper));
+    return { restPlies: plies, restSpec: spec };
   }, [steps, session, paper]);
-  const restAirframe = useMemo(
-    () => (restPlies.length > 1 ? buildAirframe(restPlies, paper) : null),
-    [restPlies, paper],
-  );
+  const restAirframe = restSpec?.af ?? null;
 
   // Which face of the wing the rolled nose bulges from, for the elevator's
   // starting angle; and the elevator itself, bent into the drawn model.
   // Read off the aeroplane that flies, not the one drawn: drawn without its
   // thickness, or mid-fold, no nose stands off the wing, and the flying
   // screen started from a flat elevator where the list's card did not.
-  const bulge = useMemo(() => (restAirframe ? noseBulge(restAirframe, restPlies) : { side: 0 as const, offset: 0, ahead: 0 }),
-    [restAirframe, restPlies]);
+  const bulge = useMemo(() => (restSpec ? noseBulge(restSpec) : { side: 0 as const, offset: 0, ahead: 0 }),
+    [restSpec]);
   const elevShown: ElevatorTune = { ...defaultElevator(bulge.side), ...elevEdit };
   const elevator = elevOn ? elevShown : null;
   /*
@@ -1112,6 +1113,11 @@ export function App() {
   const reshape = useMemo(
     () => (useThickness ? noseStretch(plies, paper, rollNow.extra, rollNow.band) : null),
     [useThickness, plies, paper, rollNow],
+  );
+  // What the flying screen flies: the measured plane, or the one on the stage when there is no record behind it.
+  const flySpec = useMemo(
+    () => restSpec ?? (plies.length > 1 ? measurePlane(plies, paper, paper.foldedPitch) : null),
+    [restSpec, plies, paper],
   );
   const reshapedPlies = useMemo(
     () => (reshape ? shownPlies.map((f) => ({ ...f, points: f.points.map(reshape) })) : shownPlies),
@@ -1867,14 +1873,14 @@ export function App() {
       }
       patterns.push([drawPatternPage(width, height, session.creases, session.dimensions, steps, facts,
         { current: null, dimRef }), '2-전개도-완성']);
-      const fbase = restAirframe && !imported && canFly(restAirframe) ? flightBase(restAirframe, restPlies, flapRegion) : null;
-      const report = fbase && restAirframe ? flightReport(fbase, restAirframe, restPlies, paper, flightView) : null;
+      const fbase = restSpec && !imported && canFly(restSpec.af) ? flightBase(restSpec, flapRegion) : null;
+      const report = fbase && restSpec ? flightReport(fbase, restSpec, paper, flightView) : null;
       // The page shows the same batch the flying screen does: seeded, so the
       // same settings give the same numbers.
       const throwsN = 100;
       const batch = report && fbase ? statsNow(fbase.bare,
         statsKey(report.launch, throwsN, [report.vee, flightView.cgInput, flightView.clips]),
-        report.af, report.m, report.launch, throwsN, restPlies, paper) : null;
+        report.af, report.m, report.launch, throwsN, restSpec!, paper) : null;
       const flight = drawFlightPage(report, flightView, facts, batch);
       const base = planeName.trim() || 'paperplane';
       if (as === 'pdf') {
@@ -2464,8 +2470,8 @@ export function App() {
           * print and cut. It opens over the work rather than sitting beside it,
           * which gives the model the whole window.
           */}
-        {showFlight && airframe && (rec || imported) && (
-          <FlightPanel airframe={restAirframe ?? airframe} plies={restAirframe ? restPlies : plies} paper={paper}
+        {showFlight && airframe && flySpec && (rec || imported) && (
+          <FlightPanel spec={flySpec} plies={restSpec ? restPlies : plies} paper={paper}
             settings={flightView} onSettings={onFlightSettings} shownPlies={reshapedPlies}
             elevatorTune={elevUsed ?? elevShown} recommended={rec}
             ownElevator={!!flyElev}

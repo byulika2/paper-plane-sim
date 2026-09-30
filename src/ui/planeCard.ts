@@ -8,13 +8,14 @@
  * with the first.
  */
 
-import { buildAirframe, lengthenNose } from '../aero/airframe.js';
+import { lengthenNose } from '../aero/airframe.js';
+import { measurePlane } from '../aero/spec.js';
 import { renderFaces } from '../origami/space.js';
 import { SHEET_SIZES, paperProps } from '../paper/stock.js';
 import type { PaperProps } from '../paper/stock.js';
 import { bendElevator } from './elevator.js';
 import type { ElevatorTune } from './elevator.js';
-import { replay, rollLength } from './foldSession.js';
+import { foldEdges, replay, rollLength } from './foldSession.js';
 import type { Step } from './foldSession.js';
 import { DEFAULT_FLIGHT, balanceGrade, flightBase, flightReport, flyingVee, liftWings } from './flightReport.js';
 import type { FlightSettings, Grade } from './flightReport.js';
@@ -97,8 +98,9 @@ function build(r: PlaneRecord) {
   const drawn = renderFaces(sess.state, -1, paperNow.foldedPitch);
   const roll = rollLength(r.steps, sess, paperNow.foldedPitch, drawn, paperNow);
   const plies = lengthenNose(drawn, paperNow, roll.extra, roll.band);
-  const af = plies.length > 1 ? buildAirframe(plies, paperNow) : null;
-  return { paper: paperNow, plies, af };
+  // Measured once; the flight is worked out on the measurements alone.
+  const spec = measurePlane(plies, paperNow, paperNow.foldedPitch, foldEdges(r.steps, sess, paperNow.foldedPitch, drawn, paperNow));
+  return { paper: paperNow, plies, spec, af: spec?.af ?? null };
 }
 function modelOf(r: PlaneRecord) {
   const k = modelKeyOf(r);
@@ -249,9 +251,9 @@ const flights = new Map<string, CardFlight | null>();
 export function cardFlight(r: PlaneRecord): CardFlight | null {
   const k = keyOf(r);
   if (flights.has(k)) return flights.get(k)!;
-  const { paper, plies, af } = modelOf(r);
+  const { paper, spec, af } = modelOf(r);
   let out: CardFlight | null = null;
-  if (af && af.wingArea > 1e-6 && af.meanChord > 1e-6) {
+  if (spec && af && af.wingArea > 1e-6 && af.meanChord > 1e-6) {
     // Never tuned, it is judged at the elevator recommended for this throw.
     /*
      * Every plane is judged at the angle and elevator that suit it now: the
@@ -262,12 +264,12 @@ export function cardFlight(r: PlaneRecord): CardFlight | null {
     const thrown = { ...DEFAULT_FLIGHT, angle: best?.angle ?? r.throwAngle ?? DEFAULT_FLIGHT.angle };
     const e = best?.elevator ?? recommendFor(r, thrown)!;
     const region = { y0: e.fromCm / 100, y1: (e.fromCm + e.widthCm) / 100, depth: e.depthCm / 100 };
-    const base = flightBase(af, plies, region);
+    const base = flightBase(spec, region);
     const settings = { ...thrown, region, vee: r.vee ?? null };
     const elevator = e.angleDeg;
-    const rep = flightReport(base, af, plies, paper, { ...settings, elevator });
+    const rep = flightReport(base, spec, paper, { ...settings, elevator });
     const results = runThrows(rep.af, rep.m, throwsAround(rep.launch, CARD_THROWS), 0, CARD_THROWS);
-    const stats = summarize(results, rep.af, plies, paper);
+    const stats = summarize(results, spec, paper);
     out = { time: stats.time.mean, glideRatio: stats.glideRatio, weight: af.mass.mass * 1000, height: stats.height.mean, grades: [...stats.grades, balanceGrade(rep.margin)], elevator: e, angle: thrown.angle, recommended: true };
   }
   keep(flights, k, out, 48);
@@ -279,10 +281,10 @@ export function cardFlight(r: PlaneRecord): CardFlight | null {
  * is saved with, and the one an untuned plane is judged at meanwhile.
  */
 export function recommendFor(r: PlaneRecord, settings: FlightSettings = DEFAULT_FLIGHT): ElevatorTune | null {
-  const { paper, plies, af } = modelOf(r);
-  if (!af || !(af.wingArea > 1e-6) || !(af.meanChord > 1e-6)) return null;
+  const { paper, spec, af } = modelOf(r);
+  if (!spec || !af || !(af.wingArea > 1e-6) || !(af.meanChord > 1e-6)) return null;
   const s = { ...settings, vee: settings.vee ?? r.vee ?? null };
-  return recommendElevator(af, plies, paper, s, JSON.stringify([keyOf(r), s.speed, s.angle, s.height, s.bank, s.vee, s.headwind, s.gust ?? 1]), r.elevator);
+  return recommendElevator(spec, paper, s, JSON.stringify([keyOf(r), s.speed, s.angle, s.height, s.bank, s.vee, s.headwind, s.gust ?? 1]), r.elevator);
 }
 
 /**
@@ -292,13 +294,13 @@ export function recommendFor(r: PlaneRecord, settings: FlightSettings = DEFAULT_
  * plane is saved with.
  */
 export function recommendThrow(r: PlaneRecord, settings: FlightSettings = DEFAULT_FLIGHT): { elevator: ElevatorTune; angle: number } | null {
-  const { paper, plies, af } = modelOf(r);
-  if (!af || !(af.wingArea > 1e-6) || !(af.meanChord > 1e-6)) return null;
+  const { paper, spec, af } = modelOf(r);
+  if (!spec || !af || !(af.wingArea > 1e-6) || !(af.meanChord > 1e-6)) return null;
   const own = r.throwAngle ?? DEFAULT_FLIGHT.angle;
   const angles = [own, ...THROW_ANGLES.filter((a) => a !== own)];
   const judged = angles.map((angle) => {
     const s = { ...settings, angle, vee: settings.vee ?? r.vee ?? null };
-    return { angle, ...recommendElevatorTimed(af, plies, paper, s,
+    return { angle, ...recommendElevatorTimed(spec, paper, s,
       JSON.stringify([keyOf(r), s.speed, s.angle, s.height, s.bank, s.vee, s.headwind, s.gust ?? 1]), r.elevator) };
   });
   const best = longest(judged);
@@ -314,8 +316,8 @@ export const THROW_ANGLES = [70, 80, 90] as const;
  * elevator, or the one recommended for that angle when it has none.
  */
 export function recommendAngle(r: PlaneRecord, settings: FlightSettings = DEFAULT_FLIGHT): number | null {
-  const { paper, plies, af } = modelOf(r);
-  if (!af || !(af.wingArea > 1e-6) || !(af.meanChord > 1e-6)) return null;
+  const { paper, spec, af } = modelOf(r);
+  if (!spec || !af || !(af.wingArea > 1e-6) || !(af.meanChord > 1e-6)) return null;
   let best: number | null = null;
   let top = -Infinity;
   for (const angle of THROW_ANGLES) {
@@ -323,7 +325,7 @@ export function recommendAngle(r: PlaneRecord, settings: FlightSettings = DEFAUL
     const e = r.elevator ?? recommendFor(r, s);
     if (!e) continue;
     const region = { y0: e.fromCm / 100, y1: (e.fromCm + e.widthCm) / 100, depth: e.depthCm / 100 };
-    const rep = flightReport(flightBase(af, plies, region), af, plies, paper, { ...s, region, elevator: e.angleDeg });
+    const rep = flightReport(flightBase(spec, region), spec, paper, { ...s, region, elevator: e.angleDeg });
     const results = runThrows(rep.af, rep.m, throwsAround(rep.launch, CARD_THROWS), 0, CARD_THROWS);
     const time = results.reduce((sum, x) => sum + x.time, 0) / Math.max(1, results.length);
     if (time > top + 1e-6) { top = time; best = angle; }

@@ -10,6 +10,7 @@
  */
 
 import type { Airframe } from '../aero/airframe.js';
+import type { PlaneSpec } from '../aero/spec.js';
 import {
   aeroModel, fly, glideMargin, noseBulge, thicknessFormFactor, wingBending, withCgAt, withDihedral, withNoseBulge, withNoseWeight,
 } from '../aero/flight.js';
@@ -90,11 +91,16 @@ export interface Rating { readonly tone: Tone; readonly v: number; readonly text
 /** The slow part, which depends only on the folded shape. */
 export interface FlightBase { readonly bulge: NoseBulge; readonly bare: AeroModel }
 
-export function flightBase(airframe: Airframe, plies: readonly RenderFace[], region?: FlapRegion): FlightBase {
-  const bulge = noseBulge(airframe, plies);
+/**
+ * From the measured aeroplane (see `measurePlane`), never from the folded
+ * pieces: one aeroplane, whatever shows it.
+ */
+export function flightBase(spec: PlaneSpec, region?: FlapRegion): FlightBase {
+  const airframe = spec.af;
+  const bulge = noseBulge(spec);
   const bare = withNoseBulge(airframe, aeroModel(airframe, region), bulge);
   // The wing as thick as its stacked paper: friction scaled by the section's form factor.
-  const { ff } = thicknessFormFactor(airframe, plies);
+  const { ff } = thicknessFormFactor(spec);
   return { bulge, bare: { ...bare, wetShare: bare.wetShare * ff, cd0: bare.cd0 + (ff - 1) * (bare.cd0 - bare.cdForm) } };
 }
 
@@ -188,9 +194,10 @@ export function liftWings(
 }
 
 export function flightReport(
-  base: FlightBase, airframe: Airframe, plies: readonly RenderFace[], paper: PaperProps,
+  base: FlightBase, spec: PlaneSpec, paper: PaperProps,
   s: FlightSettings,
 ): FlightReport {
+  const airframe = spec.af;
   const flatWing = Math.abs(Math.round((airframe.dihedral * 180) / Math.PI)) < 3;
   const vee = flyingVee(airframe, s.vee);
   // The plies are real paper's already (see `lengthenNose`): the balance point is theirs.
@@ -214,7 +221,7 @@ export function flightReport(
     ...((s.gust ?? 1) !== 1 ? { gust: s.gust } : {}),
   };
   const flight = fly(af, m, launch);
-  const bend = wingBending(af, plies, paper, flight.maxLoad);
+  const bend = wingBending(spec, paper, flight.maxLoad);
 
   const margin = glideMargin(af, m, s.elevator);
   /*

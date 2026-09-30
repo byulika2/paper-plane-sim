@@ -12,9 +12,9 @@
  */
 
 import type { Airframe } from '../aero/airframe.js';
+import type { PlaneSpec } from '../aero/spec.js';
 import { fly, wingBending } from '../aero/flight.js';
 import type { AeroModel, Flight, FlightKind, FlightScore, Launch } from '../aero/flight.js';
-import type { RenderFace } from '../origami/space.js';
 import type { PaperProps } from '../paper/stock.js';
 import type { Grade } from './flightReport.js';
 
@@ -79,9 +79,10 @@ export interface ThrowResult {
 export function runThrows(af: Airframe, m: AeroModel, launches: readonly Launch[], from: number, to: number): ThrowResult[] {
   const out: ThrowResult[] = [];
   for (let i = from; i < Math.min(to, launches.length); i++) {
-    // A 4 ms step gives the same flights as 1-2 ms for these gliders, at a
-    // third of the cost, which a hundred throws need.
-    const f = fly(af, m, launches[i]!, 0.004);
+    // An 8 ms step gives the same flights as 1-4 ms for these gliders - every
+    // book plane's time to a hundredth of a second, the same kind of flight,
+    // at three elevator settings - at half the cost, which a hundred throws need.
+    const f = fly(af, m, launches[i]!, 0.008);
     out.push({
       time: f.time, height: f.maxHeight, distance: Math.abs(f.distance), kind: f.kind,
       score: f.score, maxLoad: f.maxLoad, flight: f,
@@ -151,7 +152,7 @@ const median = (xs: readonly number[]) => quantile([...xs].sort((a, b) => a - b)
  *   small-bend sums stop meaning a number, and the wing is folding.
  */
 export function summarize(
-  results: readonly ThrowResult[], af: Airframe, plies: readonly RenderFace[], paper: PaperProps,
+  results: readonly ThrowResult[], spec: PlaneSpec, paper: PaperProps,
 ): FlightStats {
   const n = results.length;
   if (n === 0) throw new Error('summarize: no throws to summarize');
@@ -185,7 +186,7 @@ export function summarize(
   const ratios = results.map((r) => r.score.glideRatio).filter((v): v is number => v !== null);
 
   const hardLoad = quantile([...results.map((r) => r.maxLoad)].sort((a, b) => a - b), 0.9);
-  const bend = wingBending(af, plies, paper, hardLoad);
+  const bend = wingBending(spec, paper, hardLoad);
 
   const times = (k: number, of: string) => `${n}번 중 ${k}번 ${of}`;
   const grades: Grade[] = [
@@ -259,12 +260,12 @@ export function keepStats(owner: object, key: string, stats: FlightStats): void 
 /** All at once, for the download: from the cache when it is there. */
 export function statsNow(
   owner: object, key: string, af: Airframe, m: AeroModel, launch: Launch, n: number,
-  plies: readonly RenderFace[], paper: PaperProps,
+  spec: PlaneSpec, paper: PaperProps,
 ): FlightStats {
   const hit = cachedStats(owner, key);
   if (hit) return hit;
   const launches = throwsAround(launch, n);
-  const stats = summarize(runThrows(af, m, launches, 0, n), af, plies, paper);
+  const stats = summarize(runThrows(af, m, launches, 0, n), spec, paper);
   keepStats(owner, key, stats);
   return stats;
 }
