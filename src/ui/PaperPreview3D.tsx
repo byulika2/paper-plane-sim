@@ -21,9 +21,11 @@ interface Props {
   focus: 'wings' | 'elevator';
   /** Where the elevator is, cm out from the middle: the close-up is framed on it. */
   region?: { fromCm: number; widthCm: number };
+  /** A word laid over the picture, such as how far each wing is up. */
+  caption?: string;
 }
 
-export function PaperPreview3D({ af, plies, vee, focus, region }: Props) {
+export function PaperPreview3D({ af, plies, vee, focus, region, caption }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const mount = mountRef.current!;
@@ -43,20 +45,25 @@ export function PaperPreview3D({ af, plies, vee, focus, region }: Props) {
     // From straight behind (the scene's x is forward), a little above the wing.
     const tail = af.cgFromNose - af.length;
     if (focus === 'wings') {
+      // Close enough that the span fills the picture, with a dashed level line through the wing root to read the V against.
       const r = Math.max(af.span, 0.08);
-      camera.position.set(-r * 2.2, r * 0.25, 0);
+      camera.position.set(-r * 1.5, r * 0.12, 0);
       camera.lookAt(0, 0, 0);
+      const level = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, -af.span * 0.6), new THREE.Vector3(0, 0, af.span * 0.6)]);
+      const dash = new THREE.Line(level, new THREE.LineDashedMaterial({ color: 0xf87171, dashSize: 0.004, gapSize: 0.003 }));
+      dash.computeLineDistances();
+      scene.add(dash);
     } else {
       /*
-       * The bent stretch of the right wing's trailing edge, filling the
-       * picture, seen from behind and a little above - with a dashed line
-       * where the edge was before it was bent, so a millimetre up or down
-       * shows against it.
+       * Both elevators, the trailing edge from wing tip to wing tip filling
+       * the picture, seen from behind and above at a slant - with a dashed
+       * line on each side where the edge was before it was bent, so a
+       * millimetre up or down shows against it.
        */
       const from = Math.max(0, (region?.fromCm ?? 1) / 100);
       const to = Math.min(af.span / 2, from + (region?.widthCm ?? 3) / 100);
-      const mid = (from + to) / 2;
-      const halfWide = (to - from) / 2 + 0.006;
+      const halfWide = to + 0.006;
       // The trailing edge's height just inboard of the bend, off the unbent paper.
       // With the wings in their V, as the model is drawn: the unbent edge rises across the span with it.
       const lift = liftWings(af, plies, vee);
@@ -64,23 +71,26 @@ export function PaperPreview3D({ af, plies, vee, focus, region }: Props) {
         let ys = 0; let n = 0;
         for (const f of plies) for (const q of f.points) {
           const b = af.frame.toBody(q);
-          if (b[0] < tail + 0.004 && Math.abs(b[1] - yy) < 0.004) { ys += -lift(b)[2]; n++; }
+          if (b[0] < tail + 0.004 && Math.abs(Math.abs(b[1]) - yy) < 0.004) { ys += -lift(b)[2]; n++; }
         }
         return n ? ys / n : 0;
       };
-      const y = edgeAt(from - 0.003);
+      // Just outboard of where the bend starts - clear of the keel when it starts at the middle.
+      const y = edgeAt(Math.max(from - 0.003, 0.004));
       const slope = Math.tan((vee * Math.PI) / 180);
-      const ref = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(tail, y + (0.003) * slope, from), new THREE.Vector3(tail, y + (to - from + 0.003) * slope, to)]);
-      const dash = new THREE.Line(ref, new THREE.LineDashedMaterial({ color: 0xf87171, dashSize: 0.002, gapSize: 0.0015 }));
-      dash.computeLineDistances();
-      scene.add(dash);
+      for (const side of [1, -1]) {
+        const ref = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(tail, y + 0.003 * slope, side * from), new THREE.Vector3(tail, y + (to - from + 0.003) * slope, side * to)]);
+        const dash = new THREE.Line(ref, new THREE.LineDashedMaterial({ color: 0xf87171, dashSize: 0.002, gapSize: 0.0015 }));
+        dash.computeLineDistances();
+        scene.add(dash);
+      }
       aim = (aspect: number) => {
-        // Near enough that the picture's width is the bent stretch and no more.
+        // Near enough that the picture's width is the two elevators and no more.
         const half = Math.tan((camera.fov * Math.PI) / 360) * Math.max(1, aspect);
-        const d = halfWide / half;
-        camera.position.set(tail - d, y + d * 0.18, mid);
-        camera.lookAt(tail + 0.002, y, mid);
+        const d = (halfWide / half) * 1.05;
+        camera.position.set(tail - d * 0.85, y + d * 0.45, 0);
+        camera.lookAt(tail + 0.01, y, 0);
       };
     }
     const draw = () => {
@@ -107,5 +117,10 @@ export function PaperPreview3D({ af, plies, vee, focus, region }: Props) {
       mount.removeChild(renderer.domElement);
     };
   }, [af, plies, vee, focus, region?.fromCm, region?.widthCm]);
-  return <div className={`paper-preview ${focus}`} ref={mountRef} />;
+  return (
+    <div className={`paper-preview ${focus}`}>
+      <div className="paper-preview-view" ref={mountRef} />
+      {caption && <span className="paper-preview-caption">{caption}</span>}
+    </div>
+  );
 }

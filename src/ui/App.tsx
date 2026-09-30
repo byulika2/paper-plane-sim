@@ -35,7 +35,7 @@ import { collapsePattern } from '../origami/collapse.js';
 import { buildAirframe, noseStretch, rolledBack } from '../aero/airframe.js';
 import { measurePlane } from '../aero/spec.js';
 import { noseBulge } from '../aero/flight.js';
-import { bendElevator, defaultElevator } from './elevator.js';
+import { ELEVATOR, bendElevator, defaultElevator } from './elevator.js';
 import { cardFlightLater, recommendAngleLater, recommendLater, recommendThrowLater } from './flightJobs.js';
 import { pliesAtLine, pliesUnderLine, pocketHinges, pocketOptions } from '../origami/pocket.js';
 import type { PocketOption } from '../origami/pocket.js';
@@ -261,7 +261,8 @@ export function App() {
    * A book plane shown one step at a time, from a blank sheet: the step list
    * IS the tutorial. `at` is how many of its steps are folded on screen.
    */
-  const [tutorial, setTutorial] = useState<{ name: string; steps: Step[]; at: number } | null>(null);
+  // `own`: the walk-through of a plane opened from the list, which closes back to that plane as it was.
+  const [tutorial, setTutorial] = useState<{ name: string; steps: Step[]; at: number; own?: boolean } | null>(null);
   /*
    * A finished aeroplane is looked at, not folded: it opens with the tools
    * put away, and 수정하기 takes it back to the bench. A plane still being
@@ -1059,21 +1060,27 @@ export function App() {
    * is bent. Turning it on the flying screen bends the model the same way, so
    * there is one elevator, not a model's and a flight's that can disagree.
    */
-  const flapTune = elevUsed ?? elevShown;
+  /*
+   * What it flies with: flat until the pupil sets an elevator in the
+   * simulator and applies it. The recommendation is only offered there.
+   */
+  // Its size is always the fixed one (ELEVATOR), whatever an older record held.
+  const flownElev: ElevatorTune = useMemo(() => ({ ...(flyElev ?? defaultElevator(0)), ...ELEVATOR }), [flyElev]);
+  const flapTune = flownElev;
   const flapRegion = useMemo(() => ({
     y0: flapTune.fromCm / 100, y1: (flapTune.fromCm + flapTune.widthCm) / 100, depth: flapTune.depthCm / 100,
   }), [flapTune.fromCm, flapTune.widthCm, flapTune.depthCm]);
   const flightView = useMemo(() => ({
-    ...flightSettings, elevator: elevUsed ? elevUsed.angleDeg : 0, region: flapRegion,
-  }), [flightSettings, elevUsed?.angleDeg, flapRegion]);
+    ...flightSettings, elevator: flownElev.angleDeg, region: flapRegion,
+  }), [flightSettings, flownElev.angleDeg, flapRegion]);
   // The elevator's angle moved on the flying screen is a try of the pupil's own.
   const onFlightSettings = useCallback((next: FlightSettings) => {
     if (next.elevator !== flightView.elevator) {
-      const from = elevUsed ?? elevShown;
-      setFlyElev({ ...from, angleDeg: next.elevator, auto: undefined });
+      // After any change to where it is bent, made in the same apply.
+      setFlyElev((e) => ({ ...(e ?? flownElev), angleDeg: next.elevator, auto: undefined }));
     }
     setFlightSettings(next);
-  }, [flightView.elevator, elevUsed, elevShown]);
+  }, [flightView.elevator, flownElev]);
   /*
    * Turning it on pins the angle it shows. Until then the starting angle
    * follows the nose - and folding can move which way the nose bulges, which
@@ -1165,7 +1172,7 @@ export function App() {
   }, [airframe, plies, readOnly, flightSettings.vee]);
 
   // Bent only where it is flown. While folding, the trailing edge lies as it was folded.
-  const bentIn = showFlight ? elevUsed : null;
+  const bentIn = showFlight ? flownElev : null;
   const shownPlies = useMemo(() => bendElevator(plies, airframe, bentIn),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [plies, airframe, bentIn?.fromCm, bentIn?.widthCm, bentIn?.depthCm, bentIn?.angleDeg]);
@@ -1760,7 +1767,7 @@ export function App() {
    * set directly rather than as edits: stepping back and forth through a
    * walk-through is not something to undo.
    */
-  const tutorialTo = useCallback((t: { name: string; steps: Step[]; at: number }, at: number) => {
+  const tutorialTo = useCallback((t: { name: string; steps: Step[]; at: number; own?: boolean }, at: number) => {
     const next = Math.max(0, Math.min(t.steps.length, at));
     const shown = t.steps.slice(0, next);
     stepsRef.current = shown;
@@ -2069,8 +2076,15 @@ export function App() {
               }
             }}
               title="다 접었어요. 완성된 비행기로 표시하고 보기 모드로 돌아가요.">✓ 다 접었어요</button>
-            : <button className="topbar-mode" onClick={() => setEditing(true)}
-              title="완성된 비행기를 다시 고쳐 접어요. 접는 도구가 나타나요.">✎ 수정하기</button>
+            : <>
+              <button className="topbar-mode" onClick={() => setEditing(true)}
+                title="완성된 비행기를 다시 고쳐 접어요. 접는 도구가 나타나요.">✎ 수정하기</button>
+              {/* The finished plane, folded again from the flat sheet one step at a time. */}
+              <button className="topbar-mode" onClick={() => {
+                fold.cancel(); setMode('folded'); setScreen('fold');
+                tutorialTo({ name: planeName, steps: [...steps], at: 0, own: true }, 0);
+              }} title="이 비행기를 처음부터 한 단계씩 따라 접어 봐요.">▶ 튜토리얼</button>
+            </>
         )}
         {screen === 'fold' && !tutorial && !imported && steps.length > 0 && (
           <span className={`plane-status ${editing ? 'wip' : 'done'}`}>{editing ? '접는 중' : '완성'}</span>
@@ -2560,10 +2574,8 @@ export function App() {
         {showFlight && airframe && flySpec && (rec || imported) && (
           <FlightPanel spec={flySpec} planeName={planeName} plies={restSpec ? restPlies : plies} paper={paper}
             settings={flightView} onSettings={onFlightSettings} shownPlies={reshapedPlies}
-            elevatorTune={elevUsed ?? elevShown} recommended={rec}
-            ownElevator={!!flyElev}
-            onElevatorTune={(patch) => setFlyElev((e) => ({ ...(e ?? elevUsed ?? elevShown), ...patch, auto: undefined }))}
-            onUseRecommended={() => setFlyElev(null)}
+            elevatorTune={flownElev} recommended={rec}
+            onElevatorTune={(patch) => setFlyElev((e) => ({ ...(e ?? flownElev), ...patch, auto: undefined }))}
             onRecompute={() => setRecAsk(flightSettings)}
             recommendedAngle={cardsAngle ?? (bestAngle && bestAngle.key === angleKey ? bestAngle.angle : null)} />
         )}
@@ -2652,10 +2664,21 @@ export function App() {
                 <button onClick={() => tutorialTo(tutorial, 0)} disabled={tutorial.at === 0}>
                   처음부터
                 </button>
-                <button onClick={foldFromHere}
-                  title="튜토리얼을 멈추고, 지금 모양에서 도구로 직접 이어 접어요.">
-                  여기서부터 직접 접기
-                </button>
+                {tutorial.own ? (
+                  <button onClick={() => {
+                    // Back to the finished plane, as it was opened.
+                    const all = tutorial.steps;
+                    stepsRef.current = all;
+                    setSteps(all);
+                    setTutorial(null);
+                    setStandUp(true); showAsPlane();
+                  }} title="튜토리얼을 닫고 완성된 비행기로 돌아가요.">튜토리얼 닫기</button>
+                ) : (
+                  <button onClick={foldFromHere}
+                    title="튜토리얼을 멈추고, 지금 모양에서 도구로 직접 이어 접어요.">
+                    여기서부터 직접 접기
+                  </button>
+                )}
               </span>
             </div>
           )}

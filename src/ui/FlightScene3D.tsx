@@ -29,8 +29,23 @@ interface Props {
 // The floor's x along the throw, y up, z to its side.
 const at = (p: FlightPoint) => new THREE.Vector3(p.gx ?? p.x, p.h, p.gy ?? 0);
 
-/** The aeroplane's attitude: heading about the vertical, nose raised by climb plus angle of attack, rolled by its bank. */
+/**
+ * The aeroplane's attitude, from the flight's own vectors: the nose raised
+ * off the direction of flight by the angle of attack, toward its up. Built
+ * from heading, climb and bank it spun round and round straight up, where a
+ * heading means nothing.
+ */
 function attitude(p: FlightPoint): THREE.Quaternion {
+  if (p.fwd && p.up) {
+    // Flight axes (x along the throw, y to its side, z up) to the floor's (x, y up, z side).
+    const e = new THREE.Vector3(p.fwd[0], p.fwd[2], p.fwd[1]);
+    const u = new THREE.Vector3(p.up[0], p.up[2], p.up[1]);
+    const a = p.alpha ?? 0;
+    const nose = e.clone().multiplyScalar(Math.cos(a)).addScaledVector(u, Math.sin(a)).normalize();
+    const top = u.clone().multiplyScalar(Math.cos(a)).addScaledVector(e, -Math.sin(a)).normalize();
+    const right = new THREE.Vector3().crossVectors(nose, top);
+    return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(nose, top, right));
+  }
   const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -(p.heading ?? 0));
   const pitch = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), (p.gamma ?? 0) + (p.alpha ?? 0));
   const roll = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), p.bank ?? 0);

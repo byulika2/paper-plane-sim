@@ -49,7 +49,7 @@ export interface FlightSettings {
  * is judged, and tuned, at a throw it is built to take.
  */
 export const DEFAULT_FLIGHT: FlightSettings = {
-  speed: 20, angle: 80, height: 2.2, bank: 90, grip: 'over', updraft: 0, cgInput: null,
+  speed: 20, angle: 80, height: 2.2, bank: 0, grip: 'over', updraft: 0, cgInput: null,
   headwind: 0, crosswind: 0, elevator: 0, clips: 0, vee: null,
 };
 

@@ -328,6 +328,9 @@ export interface FlightPoint {
   readonly speed?: number;
   readonly alpha?: number;
   readonly gamma?: number;
+  /** Which way it flies and which way its lift points, unit vectors (x along the throw, y to its side, z up). */
+  readonly fwd?: Vec3;
+  readonly up?: Vec3;
   readonly bank?: number;
   readonly lift?: number;
   readonly drag?: number;
@@ -473,6 +476,65 @@ export function withDihedral(af: Airframe, m: AeroModel, deg: number): { af: Air
   };
 }
 
+const dot3 = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const add3 = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const scale3 = (a: Vec3, k: number): Vec3 => [a[0] * k, a[1] * k, a[2] * k];
+const cross3 = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const unit3 = (a: Vec3): Vec3 => { const n = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / n, a[1] / n, a[2] / n]; };
+/** `u` made square to the unit `e` and of unit length. */
+function squareTo(u: Vec3, e: Vec3): Vec3 {
+  const k = dot3(u, e);
+  const w: Vec3 = [u[0] - k * e[0], u[1] - k * e[1], u[2] - k * e[2]];
+  const n = Math.hypot(w[0], w[1], w[2]);
+  if (n > 1e-9) return [w[0] / n, w[1] / n, w[2] / n];
+  return levelUp(e) ?? unit3(cross3(e, [0, 1, 0]));
+}
+/** Up square to the flight, in the vertical plane through it; none when the flight is straight up or down. */
+function levelUp(e: Vec3): Vec3 | null {
+  const w: Vec3 = [-e[2] * e[0], -e[2] * e[1], 1 - e[2] * e[2]];
+  const n = Math.hypot(w[0], w[1], w[2]);
+  return n > 0.05 ? [w[0] / n, w[1] / n, w[2] / n] : null;
+}
+const wrapNear = (a: number, near: number) => a + 2 * Math.PI * Math.round((near - a) / (2 * Math.PI));
+/**
+ * Climb angle, heading and bank read off the flight and its up, for showing
+ * and for telling a loop. Every attitude reads two ways - climbing at 60°
+ * the right way up is climbing at 120° on its back the other way - and the
+ * one nearer the last reading is taken, each angle carried on past a whole
+ * turn, so a loop reads as the climb going on over the top.
+ */
+function eulerOf(e: Vec3, u: Vec3, last: { gamma: number; heading: number; bank: number; flipped?: boolean }) {
+  const horiz = Math.hypot(e[0], e[1]);
+  const g1 = Math.atan2(e[2], horiz);
+  // Straight up or down the heading is the last one.
+  const h1 = horiz > 1e-6 ? Math.atan2(e[1], e[0]) : last.heading;
+  const at = (gamma: number, heading: number) => {
+    const lv: Vec3 = [-Math.sin(gamma) * Math.cos(heading), -Math.sin(gamma) * Math.sin(heading), Math.cos(gamma)];
+    return Math.atan2(dot3(u, cross3(lv, e)), dot3(u, lv));
+  };
+  const a = { gamma: g1, heading: h1, bank: at(g1, h1) };
+  const b = { gamma: Math.PI - g1, heading: h1 + Math.PI, bank: at(Math.PI - g1, h1 + Math.PI) };
+  const near = (x: typeof a) => ({
+    gamma: wrapNear(x.gamma, last.gamma), heading: wrapNear(x.heading, last.heading), bank: wrapNear(x.bank, last.bank),
+  });
+  const na = near(a); const nb = near(b);
+  /*
+   * The bank is what carries on: it turns only as fast as the aeroplane
+   * rolls, where the climb angle and the heading both jump as the flight
+   * passes straight up or down (a loop over the top reads either climbing on
+   * past 90° right way up, or coming back under 90° upside down, the heading
+   * turned about - and only the first keeps the bank).
+   */
+  const cost = (x: typeof na) => Math.abs(x.bank - last.bank) + 0.1 * Math.abs(x.gamma - last.gamma);
+  // The reading goes on as it was unless the other is clearly nearer: two nearly equal would flicker.
+  const same = last.flipped ? nb : na;
+  const other = last.flipped ? na : nb;
+  const flip = cost(other) < cost(same) - 0.05;
+  const pick = flip ? other : same;
+  return { ...pick, flipped: flip ? !last.flipped : !!last.flipped };
+}
+
+
 /*
  * Four-millisecond steps: the fourth-order steps give the same flights to a
  * hundredth of a second as a millisecond did, every book plane's kind of
@@ -509,8 +571,19 @@ export function fly(af: Airframe, m: AeroModel, launch: Launch, dt = 0.004): Fli
   // Wings drooping (anhedral) roll it further over instead: the rate turns negative.
   const dih = af.dihedral >= 0 ? Math.max(0.05, af.dihedral) : af.dihedral;
   const levelling = (V: number) => (ROLL_LEVEL * dih) / (1 + (V / ROLL_SPEED) ** 2);
-  // In the air: V, gamma (climb), psi (heading), alpha, q, phi (bank), and
-  // x, y, h relative to the air.
+  /*
+   * In the air, as vectors: where it is, its velocity, and which way its lift
+   * points (the aeroplane's "up", square to the velocity), then its angle of
+   * attack and pitch rate - all relative to the air.
+   *
+   * It was flown as climb angle, heading and bank. Straight up those mean
+   * nothing: a heading has no direction to point, and a plane thrown on its
+   * side near the vertical spun its heading round twice in half a second
+   * while its sideways lift, which should have bent the climb over to one
+   * side, was spent turning a compass that was not there. As vectors the lift
+   * bends the path whichever way it points, straight up or not, and the
+   * angles are only read off them to be shown.
+   */
   /*
    * The hand moves over the ground; the aeroplane flies in the air. Thrown
    * into a wind it leaves the hand that much faster through the air, and
@@ -520,9 +593,12 @@ export function fly(af: Airframe, m: AeroModel, launch: Launch, dt = 0.004): Fli
   const ax = launch.speed * Math.cos(up) + launch.headwind;
   const ay = -launch.crosswind;
   const az = launch.speed * Math.sin(up);
-  const airSpeed = Math.hypot(ax, ay, az);
   const airUp = Math.atan2(az, Math.hypot(ax, ay));
-  let st = [airSpeed, airUp, Math.atan2(ay, ax), 0, 0, bank0, 0, 0, launch.height];
+  const e0 = unit3([ax, ay, az]);
+  // Up square to the flight in the vertical plane, rolled by the bank: a positive bank lifts toward +y.
+  const level0 = levelUp(e0) ?? unit3([-e0[0], -e0[1], 0]);
+  const u0 = add3(scale3(level0, Math.cos(bank0)), scale3(cross3(level0, e0), Math.sin(bank0)));
+  let st = [0, 0, launch.height, ax, ay, az, u0[0], u0[1], u0[2], 0, 0];
   let maxLoad = 0;
   let maxAir = 0;
   let stalled = false;
@@ -546,29 +622,50 @@ export function fly(af: Airframe, m: AeroModel, launch: Launch, dt = 0.004): Fli
   let airApexT = 0;
   const airPath: { t: number; h: number }[] = [];
   const deriv = (s: number[]) => {
-    const [V0, gamma, psi, alpha0, q, phi] = s as [number, number, number, number, number, number];
+    const v: Vec3 = [s[3]!, s[4]!, s[5]!];
+    const V0 = Math.hypot(v[0], v[1], v[2]);
+    const e = V0 > 1e-9 ? scale3(v, 1 / V0) : e0;
     const V = Math.max(0.3, V0);
+    const u = squareTo([s[6]!, s[7]!, s[8]!], e);
+    const alpha0 = s[9]!;
+    const q = s[10]!;
     const alpha = Math.atan2(Math.sin(alpha0), Math.cos(alpha0));
     const { cl, cd, s: sep } = polar(m, alpha, de, V, c);
     const qbar = 0.5 * RHO * V * V;
     const L = qbar * S * cl;
     const D = qbar * S * cd;
     const cm = pitchCoefficient(m, alpha, de, sep, cl, cd) + m.cmq * ((q * c) / (2 * V));
-    const cg = Math.cos(gamma);
-    // Straight up, heading means nothing and the turn rate is capped.
-    const turn = (L * Math.sin(phi)) / (mass * V * Math.max(0.2, Math.abs(cg)));
+    // Lift along up, drag against the flight, weight down.
+    const acc: Vec3 = [(L * u[0] - D * e[0]) / mass, (L * u[1] - D * e[1]) / mass, (L * u[2] - D * e[2]) / mass - G];
+    // How the direction of flight turns, and so how the up turns with it to stay square.
+    const along = dot3(acc, e);
+    const eDot: Vec3 = [(acc[0] - along * e[0]) / V, (acc[1] - along * e[1]) / V, (acc[2] - along * e[2]) / V];
+    /*
+     * The V rolls it level about the flight: toward the up that is square to
+     * the flight in the vertical plane. Going straight up there is no such
+     * up - no side is lower than the other - and nothing rolls it.
+     */
+    /*
+     * What rolls it is the weight's pull across the wings: nothing when the
+     * wings are level, most on its side, nothing again right way up or upside
+     * down in a loop, where the weight lies in the plane of the wings'
+     * symmetry. Read as a rate of -sin(bank) times the V's own rate, measured
+     * from the up square to the flight in the vertical plane. Taken as the
+     * bank itself, a loop reads a bank of 180 degrees over the top and was
+     * rolled out of it at full rate.
+     */
+    const spin = cross3(u, e);
+    const lvRaw = Math.hypot(e[0], e[1]);
+    const phiDot = lvRaw > 0.05 ? levelling(V) * (spin[2] / lvRaw) : 0;
+    const ue = dot3(u, eDot);
     return {
       d: [
-        (-D - W * Math.sin(gamma)) / mass,
-        (L * Math.cos(phi) - W * cg) / (mass * V),
-        turn,
-        q - (L - W * cg * Math.cos(phi)) / (mass * V),
+        v[0], v[1], v[2],
+        acc[0], acc[1], acc[2],
+        -ue * e[0] + phiDot * spin[0], -ue * e[1] + phiDot * spin[1], -ue * e[2] + phiDot * spin[2],
+        // The angle of attack: the nose's pitch less the flight's turn in the plane of symmetry.
+        q - (L - W * u[2]) / (mass * V),
         (qbar * S * c * cm) / iyy,
-        // Past its side it is going over; held there rather than spun without end.
-        Math.abs(phi) > Math.PI * 0.6 && levelling(V) < 0 ? 0 : -phi * levelling(V),
-        V * cg * Math.cos(psi),
-        V * cg * Math.sin(psi),
-        V * Math.sin(gamma),
       ],
       L, D, V, alpha,
     };
@@ -580,10 +677,12 @@ export function fly(af: Airframe, m: AeroModel, launch: Launch, dt = 0.004): Fli
   const every = Math.max(1, Math.round(0.02 / dt));
   const lift = launch.updraft ?? 0;
   const ground = (s: number[], time: number) => ({
-    x: s[6]! - launch.headwind * time,
-    y: s[7]! + launch.crosswind * time,
-    h: s[8]! + lift * time,
+    x: s[0]! - launch.headwind * time,
+    y: s[1]! + launch.crosswind * time,
+    h: s[2]! + lift * time,
   });
+  // The angles read off the vectors, carried on from the last so a loop adds a turn and nothing jumps.
+  let angles = eulerOf(e0, u0, { gamma: airUp, heading: Math.atan2(ay, ax), bank: bank0 });
   let steps = 0;
   /*
    * A state that has come apart - a stiff light aeroplane stepped too
@@ -602,38 +701,43 @@ export function fly(af: Airframe, m: AeroModel, launch: Launch, dt = 0.004): Fli
     t += dt;
     steps++;
     if (!st.every(Number.isFinite)) { diverged = true; break; }
+    // Kept a unit vector square to the flight.
+    const eNow = unit3([st[3]!, st[4]!, st[5]!]);
+    const uNow = squareTo([st[6]!, st[7]!, st[8]!], eNow);
+    st[6] = uNow[0]; st[7] = uNow[1]; st[8] = uNow[2];
+    angles = eulerOf(eNow, uNow, angles);
     const g = ground(st, t);
     maxLoad = Math.max(maxLoad, Math.abs(k1.L) / W);
     maxAir = Math.max(maxAir, k1.V);
     if (g.h > maxH) apexT = t;
-    if (st[8]! > airTop) { airTop = st[8]!; airApexT = t; }
+    if (st[2]! > airTop) { airTop = st[2]!; airApexT = t; }
     // Every transition stalls for a moment at the top; stalling again once
     // it should be gliding is the porpoising the tip is about.
     // A glide flown near the stall brushes past it; a second of it in all is the porpoising.
     if (Math.abs(k1.alpha) > m.stall && t > apexT + 1.5) stalledTime += dt;
     if (stalledTime > 1) stalled = true;
     // Nose angle above the horizon, as seen in the plane of the climb.
-    pitch = st[1]! + st[3]! * Math.cos(st[5]!);
+    pitch = angles.gamma + st[9]! * Math.cos(angles.bank);
     // The climb angle as the eye reads it: a loop adds a whole turn to it, and
     // read raw, a plane gliding level after a loop was never level again.
-    const climb = Math.atan2(Math.sin(st[1]!), Math.cos(st[1]!));
+    const climb = Math.asin(Math.max(-1, Math.min(1, eNow[2])));
     // Over on its back nose up is a loop; nose down past the vertical, a tumble.
     if (pitch > Math.PI * 0.6) looped = true;
     if (pitch < -Math.PI * 0.6) tumbled = true;
     maxH = Math.max(maxH, g.h);
     if (t > apexT + 0.2 && Math.abs(climb) < 0.45) levelTime += dt;
     // Level for a third of a second after the top: the transition is over.
-    if (steps % every === 0) airPath.push({ t, h: st[8]! });
-    if (t > airApexT + 0.05 && st[8]! < airTop && Math.abs(climb) < 0.35) {
+    if (steps % every === 0) airPath.push({ t, h: st[2]! });
+    if (t > airApexT + 0.05 && st[2]! < airTop && Math.abs(climb) < 0.35) {
       levelRun += dt;
-      if (!levelAt && levelRun > 0.3) levelAt = { t, h: st[8]! };
+      if (!levelAt && levelRun > 0.3) levelAt = { t, h: st[2]! };
     } else if (!levelAt) levelRun = 0;
-    if (pitch > Math.PI * 0.6 && st[8]! >= airTop - 1e-6) loopedClimbing = true;
+    if (pitch > Math.PI * 0.6 && st[2]! >= airTop - 1e-6) loopedClimbing = true;
     if (steps % every === 0) {
       path.push({
         t, x: Math.hypot(g.x, g.y) * Math.sign(g.x || 1), h: Math.max(0, g.h), pitch,
-        speed: k1.V, alpha: k1.alpha, gamma: st[1]!, bank: st[5]!, lift: k1.L, drag: k1.D,
-        gx: g.x, gy: g.y, heading: st[2]!,
+        speed: k1.V, alpha: k1.alpha, gamma: angles.gamma, bank: angles.bank, lift: k1.L, drag: k1.D,
+        gx: g.x, gy: g.y, heading: angles.heading, fwd: eNow, up: uNow,
       });
     }
     if (g.h <= 0) break;
@@ -657,7 +761,7 @@ export function fly(af: Airframe, m: AeroModel, launch: Launch, dt = 0.004): Fli
     : tumbled ? 'dive'
     : t < 0.6 ? 'short'
     : stalled ? 'stall'
-    : Math.atan2(Math.sin(st[1]!), Math.cos(st[1]!)) < -0.8 ? 'dive'
+    : Math.asin(Math.max(-1, Math.min(1, unit3([st[3]!, st[4]!, st[5]!])[2]))) < -0.8 ? 'dive'
     : up > Math.PI / 4 && levelTime > 1 ? 'transition'
     : 'glide';
   // The glide: from a second after coming level to just before landing.
@@ -963,6 +1067,7 @@ export function withNoseBulge(af: Airframe, m: AeroModel, bulge: NoseBulge): Aer
   const cmAc = two.cmQuarter * finite;
   return { ...m, cl0, cm0: cmAc - cl0 * m.staticMargin };
 }
+
 
 /**
  * The centre of gravity where a pupil measured it, balancing the real

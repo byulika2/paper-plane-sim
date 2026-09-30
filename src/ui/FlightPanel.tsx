@@ -15,7 +15,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PlaneSpec } from '../aero/spec.js';
 import type { RenderFace } from '../origami/space.js';
 import type { PaperProps } from '../paper/stock.js';
-import { elevatorRiseMm } from './elevator.js';
+import { ELEVATOR, ELEVATOR_STEPS, bendElevator, elevatorRiseMm } from './elevator.js';
 import type { ElevatorTune } from './elevator.js';
 import { KIND_TEXT, balanceGrade, canFly, flightBase, flightReport } from './flightReport.js';
 import type { FlightSettings } from './flightReport.js';
@@ -38,15 +38,12 @@ interface Props {
   onSettings(next: FlightSettings): void;
   /** The model as the folding screen draws it, the elevator bent in. */
   shownPlies?: readonly RenderFace[];
-  /** The elevator it flies with: always the recommended one. */
+  /** The elevator it flies with: flat until one is applied in the simulator. */
   elevatorTune?: ElevatorTune;
   /** The elevator worked out for this throw. */
   recommended?: ElevatorTune | null;
-  /** True while the plane flies with an elevator tried by hand rather than the recommended one. */
-  ownElevator?: boolean;
   /** A try of the pupil's own, never kept with the plane. */
   onElevatorTune?(patch: Partial<ElevatorTune>): void;
-  onUseRecommended?(): void;
   /** "다시 계산" pressed: the recommendations are worked out again for the throw as it now is. */
   onRecompute?(): void;
   /** Of 70, 80 and 90 degrees, the throw angle it flies longest at; null until worked out. */
@@ -83,26 +80,24 @@ const PLACES = [
 ] as const;
 
 /*
- * Always held on its side, as long-flight throwers hold it. Overhand lets go
- * behind the head, above it; underhand in front of the face, lower - and is
- * the one for a low ceiling, where the power is easier to hold back.
+ * How high the hand lets go, m: overhand, behind the head and above it, at
+ * 2.2/1.7 of the thrower's height. It was the same 2.2 m for a seven-year-old
+ * as for a grown-up; a child's hand is half a metre lower, and half a second
+ * of glide goes with it. The grown-up's stays at 2.2 m, the card's throw.
  */
-const GRIPS = [
-  // Where the hand lets go, as a share of the thrower's height: above the head, or in front of the face.
-  { label: '오버핸드', grip: 'over', share: 2.2 / 1.7 },
-  { label: '언더핸드', grip: 'under', share: 1.5 / 1.7 },
+const OVERHAND = 2.2 / 1.7;
+function releaseHeight(speed: number): number {
+  const who = THROWS.reduce((a, t) => (Math.abs(t.speed - speed) < Math.abs(a.speed - speed) ? t : a), THROWS[THROWS.length - 1]!);
+  return Math.round(who.stature * OVERHAND * 100) / 100;
+}
+
+/** How it leaves the hand: wings level (the list's throw), or on its side. */
+const BANKS = [
+  { label: '날개 수평', bank: 0 },
+  { label: '옆으로 기울여', bank: 90 },
 ] as const;
 
-/*
- * How high the hand lets go, m. It was the same 2.2 m for a seven-year-old as
- * for a grown-up; a child's hand is half a metre lower, and half a second of
- * glide goes with it. The grown-up's overhand stays at 2.2 m, the card's throw.
- */
-function releaseHeight(speed: number, grip: 'over' | 'under'): number {
-  const who = THROWS.reduce((a, t) => (Math.abs(t.speed - speed) < Math.abs(a.speed - speed) ? t : a), THROWS[THROWS.length - 1]!);
-  const g = GRIPS.find((x) => x.grip === grip) ?? GRIPS[0]!;
-  return Math.round(who.stature * g.share * 100) / 100;
-}
+const turnWord = (deg: number) => (deg > 0 ? `올림 ${deg}°` : deg < 0 ? `내림 ${-deg}°` : '평평');
 
 function Choice<T>({ items, value, pick, label, same }: {
   items: readonly T[]; value: number; pick(t: T): void;
@@ -119,12 +114,17 @@ function Choice<T>({ items, value, pick, label, same }: {
   );
 }
 
-function Slider({ value, min, max, step, onChange }: {
+/** A slider with its start, middle and end written under it. */
+function Slider({ value, min, max, step, onChange, marks }: {
   value: number; min: number; max: number; step: number; onChange(v: number): void;
+  marks?: readonly [string, string, string];
 }) {
   return (
-    <input type="range" min={min} max={max} step={step} value={value}
-      onChange={(e) => onChange(Number(e.target.value))} />
+    <div className="flight-slider">
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={(e) => onChange(Number(e.target.value))} />
+      {marks && <div className="flight-marks">{marks.map((m) => <span key={m}>{m}</span>)}</div>}
+    </div>
   );
 }
 
@@ -149,7 +149,7 @@ export function FlightPanel(props: Props) {
 
 function FlightField({
   spec, plies, paper, settings, onSettings, shownPlies, elevatorTune, recommended,
-  ownElevator, onElevatorTune, onUseRecommended, onRecompute,
+  onElevatorTune, onRecompute,
   recommendedAngle, planeName,
 }: Props) {
   const r = settings.region;
@@ -157,23 +157,61 @@ function FlightField({
   const base = useMemo(() => flightBase(spec, r),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [spec, r?.y0, r?.y1, r?.depth]);
+  /*
+   * The numbers are the plane's own, untuned: flown with its elevator flat,
+   * so a plane that lifts hard loops and loses its height, as it does when
+   * thrown straight off the bench. The elevator is a try for the simulator.
+   */
+  const untuned = useMemo(() => ({ ...settings, elevator: 0 }), [settings]);
   const report = useMemo(
-    () => flightReport(base, spec, paper, settings), [base, spec, paper, settings]);
+    () => flightReport(base, spec, paper, untuned), [base, spec, paper, untuned]);
+  const simReport = useMemo(
+    () => (settings.elevator === 0 ? report : flightReport(base, spec, paper, settings)), [base, spec, paper, settings, report]);
   const {
     speed, angle, cgInput, elevator, clips,
   } = settings;
-  const grip = settings.grip ?? 'over';
-  const set = (patch: Partial<FlightSettings>) => onSettings({ ...settings, ...patch });
-  const setSpeed = (v: number) => set({ speed: v, height: releaseHeight(v, grip) });
-  const setAngle = (v: number) => set({ angle: v });
-  const setVee = (v: number) => set({ vee: v });
   const {
-    bulge, af, m, launch, flight, vee, flatWing,
+    af, m, launch, flight, vee,
     loading,
   } = report;
   const cm = (v: number) => (v * 100).toFixed(1);
   // Each wing's rise off the flat as the paper was folded, degrees.
   const measuredVee = (airframe.dihedral * 180) / Math.PI;
+  /*
+   * Everything on the simulator's side is set first and flown on '적용하기':
+   * a throw is not worked out again for every step of a slider. The previews
+   * follow the settings at once - they only draw the paper.
+   */
+  const applied = useMemo(() => ({
+    speed, angle, gust: settings.gust ?? 1, headwind: settings.headwind, elevator,
+    vee: Math.round(vee), bank: settings.bank,
+  }), [speed, angle, settings.gust, settings.headwind, elevator, vee, settings.bank]);
+  const [draft, setDraft] = useState(applied);
+  const appliedKey = JSON.stringify(applied);
+  // Follows what is applied - the screen settling a value as it opens, or an apply - but never over an edit not yet applied.
+  const lastApplied = useRef(appliedKey);
+  useEffect(() => {
+    const was = lastApplied.current;
+    lastApplied.current = appliedKey;
+    setDraft((d) => (JSON.stringify(d) === was ? applied : d));
+  }, [appliedKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dirty = JSON.stringify(draft) !== appliedKey;
+  const edit = (patch: Partial<typeof draft>) => setDraft((d) => ({ ...d, ...patch }));
+  // Its size is fixed (see ELEVATOR); only the angle is the pupil's.
+  const draftTune: ElevatorTune = { ...ELEVATOR, angleDeg: draft.elevator };
+  const draftPlies = useMemo(() => bendElevator(plies, spec.af, draftTune),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [plies, spec.af, draft.elevator]);
+  const applyDraft = () => {
+    if (elevatorTune && (elevatorTune.fromCm !== ELEVATOR.fromCm || elevatorTune.widthCm !== ELEVATOR.widthCm || elevatorTune.depthCm !== ELEVATOR.depthCm)) {
+      onElevatorTune?.({ ...ELEVATOR });
+    }
+    onSettings({
+      ...settings, speed: draft.speed, height: releaseHeight(draft.speed), angle: draft.angle,
+      headwind: draft.headwind, crosswind: 0, updraft: 0, gust: draft.gust, elevator: draft.elevator, vee: draft.vee,
+      bank: draft.bank,
+    });
+  };
   /*
    * Two views of one plane, each with what only it shows: the throws and how
    * they are judged, or the air on the wing held still. The settings on the
@@ -274,123 +312,74 @@ function FlightField({
       <div className="flight-body">
         {/* The throw and the tuning belong to the simulator; the results page is the stat screen alone. */}
         {view === 'tunnel' && <section className="flight-inputs">
-          <h3>던지는 힘</h3>
-          <Choice items={THROWS} value={speed} pick={(t) => setSpeed(t.speed)}
+          <h3>던지는 힘 <span className="flight-value">초속 {draft.speed}m</span></h3>
+          <Choice items={THROWS} value={draft.speed} pick={(t) => edit({ speed: t.speed })}
             label={(t) => t.label} same={(t, v) => t.speed === v} />
-          <Slider value={speed} min={2} max={20} step={0.5} onChange={setSpeed} />
-          <p className="flight-value">초속 {speed}m (시속 {Math.round(speed * 3.6)}km)</p>
-          <p className="flight-hint">나이별 값은 공 던지기 연구로 어림한 거예요. 사람마다 달라요.</p>
+          <Slider value={draft.speed} min={2} max={20} step={0.5} marks={['2m', '11m', '20m']} onChange={(v) => edit({ speed: v })} />
 
-          <h3>던지는 각도</h3>
-          <Slider value={angle} min={30} max={90} step={10} onChange={setAngle} />
-          <p className="flight-value">
-            {angle}°{recommendedAngle === angle ? ' (추천)' : ''}
-            {recommendedAngle && recommendedAngle !== angle && (
-              <button className="link" onClick={() => setAngle(recommendedAngle)}>추천 {recommendedAngle}°로</button>
+          <h3>던지는 각도 <span className="flight-value">{draft.angle}°{recommendedAngle === draft.angle ? ' (추천)' : ''}</span>
+            {recommendedAngle && recommendedAngle !== draft.angle && (
+              <button className="link" onClick={() => edit({ angle: recommendedAngle })}>추천 {recommendedAngle}°</button>
             )}
-          </p>
-          <p className="flight-hint">
-            {recommendedAngle
-              ? `이 비행기는 ${recommendedAngle}°로 던질 때 가장 오래 날아요.`
-              : '가장 오래 나는 각도를 찾는 중이에요…'}
-          </p>
+          </h3>
+          <Slider value={draft.angle} min={30} max={90} step={10} marks={['30°', '60°', '90°']} onChange={(v) => edit({ angle: v })} />
 
-          <h3>던지기 자세</h3>
+          {/*
+            * Wings level, the lift bends the climb over the aeroplane's back
+            * into a loop; on its side, as long-flight throwers hold it, the
+            * lift bends it sideways and the V brings it level at the top.
+            */}
+          <h3>던지는 모양</h3>
           <div className="flight-choices">
-            {GRIPS.map((g) => (
-              <button key={g.grip} className={grip === g.grip ? 'on' : ''}
-                onClick={() => set({ grip: g.grip, bank: 90, height: releaseHeight(speed, g.grip) })}>{g.label}</button>
+            {BANKS.map((b) => (
+              <button key={b.bank} className={draft.bank === b.bank ? 'on' : ''} onClick={() => edit({ bank: b.bank })}>{b.label}</button>
             ))}
           </div>
-          <p className="flight-hint">
-            비행기를 옆으로 세워 잡고 던져요. 올라가면서 옆으로 돌다가 꼭대기에서 수평이 돼요.
-            {grip === 'over'
-              ? ' 오버핸드는 머리 뒤를 지날 때 놓아요. 힘이 세서 밖에서 높이 올리기 좋아요.'
-              : ' 언더핸드는 얼굴 앞을 지날 때 놓아요. 천장이 낮은 실내에서 힘 조절하기 쉬워요.'}
-          </p>
 
           <h3>장소</h3>
           <div className="flight-choices">
             {PLACES.map((w) => (
-              <button key={w.label} className={(settings.gust ?? 1) === w.gust ? 'on' : ''}
-                onClick={() => set({ headwind: w.headwind, crosswind: 0, updraft: 0, gust: w.gust })}>{w.label}</button>
+              <button key={w.label} className={draft.gust === w.gust ? 'on' : ''}
+                onClick={() => edit({ headwind: w.headwind, gust: w.gust })}>{w.label}</button>
             ))}
           </div>
-          <p className="flight-hint">
-            {(settings.gust ?? 1) === 1
-              ? '실내에서도 공기가 조금씩 움직여서, 던질 때마다 조금씩 달라요.'
-              : '앞에서 초속 2m쯤 바람이 불고, 던질 때마다 바람 세기가 달라요. 바람을 정면이 아니라 45° 비껴서 던지면 좋아요.'}
-          </p>
 
-          <h3>엘리베이터</h3>
-          {/*
-            * Not a setting: the elevator is the one worked out for this throw,
-            * shown so the pupil can bend the paper to match it.
-            */}
-          {recommended && (
-            <div className="flight-recommend">
-              <p>
-                <b>추천 엘리베이터</b> · 가운데에서 {recommended.fromCm}cm · 가로 {recommended.widthCm}cm ·{' '}
-                {recommended.angleDeg > 0 ? `올림 ${recommended.angleDeg}°` : recommended.angleDeg < 0 ? `내림 ${-recommended.angleDeg}°` : '평평'}
-                {recommended.angleDeg !== 0 && ` (뒤끝 ${Math.abs(elevatorRiseMm(recommended)).toFixed(1)}mm)`}
-              </p>
-              {ownElevator && onUseRecommended && (
-                <button className="primary flight-recommend-use" onClick={onUseRecommended}>추천값으로 돌아가기</button>
-              )}
-            </div>
-          )}
-          {/*
-            * Tried by hand: where on the trailing edge, how wide, how deep, and
-            * how far it is bent - the wind tunnel shows it at once, the throws
-            * when '다시 계산' is pressed.
-            */}
-          {elevatorTune && onElevatorTune && (
-            <div className="flight-elevator">
-              {([
-                ['fromCm', '가운데에서', 0, 10], ['widthCm', '가로', 0.3, 8], ['depthCm', '세로', 0.2, 3],
-              ] as const).map(([k, label, lo, hi]) => (
-                <label key={k}>{label}
-                  <input type="number" className="flight-cg" min={lo} max={hi} step={0.1}
-                    value={elevatorTune[k]}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      if (Number.isFinite(v)) onElevatorTune({ [k]: Math.min(hi, Math.max(lo, v)) });
-                    }} />cm
-                </label>
-              ))}
-            </div>
-          )}
-          {/* The real paper's trailing edge, from behind, bent as it is set. */}
-          <PaperPreview3D af={spec.af} plies={shownPlies ?? plies} vee={vee} focus="elevator" region={elevatorTune} />
-          <Slider value={elevator} min={-30} max={30} step={0.5} onChange={(v) => set({ elevator: v })} />
-          <p className="flight-value">
-            {elevator > 0 ? `올림 ${elevator}°` : elevator < 0 ? `내림 ${-elevator}°` : '평평'}
-            {elevatorTune && elevator !== 0 && ` · 뒤끝 ${Math.abs(elevatorRiseMm({ ...elevatorTune, angleDeg: elevator })).toFixed(1)}mm`}
-          </p>
-          <p className="flight-hint">날개 V자 각도: 두 날개를 평평하게 편 것을 0°로 보고, 양쪽 날개가 위로 올라간 각도를 더한 거예요.</p>
-          {/* The whole aeroplane from behind, its wings in the V set. */}
-          <PaperPreview3D af={spec.af} plies={shownPlies ?? plies} vee={vee} focus="wings" />
-          <Slider value={vee * 2} min={-20} max={60} step={2} onChange={(v) => setVee(v / 2)} />
-          <p className="flight-value">
-            {vee >= 0 ? `날개 V자 ${vee * 2}°` : `날개가 아래로 ${-vee * 2}° 처짐`}
-            {' · '}접은 모양 그대로는 {Math.round(measuredVee * 2)}°
-          </p>
-          {flatWing && (
-            <p className="flight-hint">접은 모양은 날개가 평평해요. 날리기 전에 보통 날개를 V자로 30°쯤 올리니까 30°로 시작해요.</p>
-          )}
-          {bulge.side !== 0 && (
-            <p className="flight-hint">
-              {bulge.side > 0
-                ? '코 윗부분이 볼록해요. 빠르게 올라갈 때 코가 들리기 쉬운데, 추천 엘리베이터가 그만큼 맞춰 줘요.'
-                : '코 아랫부분이 볼록해요. 빠르게 올라갈 때 코가 숙여지기 쉬운데, 추천 엘리베이터가 그만큼 맞춰 줘요.'}
-            </p>
-          )}
+          <h3>엘리베이터 <span className="flight-value">{turnWord(draft.elevator)}{draft.elevator !== 0 && ` · 뒤끝 ${Math.abs(elevatorRiseMm(draftTune)).toFixed(1)}mm`}</span>
+            {recommended && recommended.angleDeg !== draft.elevator && (
+              <button className="link" onClick={() => edit({ elevator: recommended.angleDeg })}>추천 {turnWord(recommended.angleDeg)}</button>
+            )}
+          </h3>
+          <p className="flight-value">가운데 뒤끝에서 날개 쪽으로 {ELEVATOR.widthCm}cm · 앞쪽으로 {ELEVATOR.depthCm}cm</p>
+          <PaperPreview3D af={spec.af} plies={draftPlies} vee={draft.vee} focus="elevator" region={draftTune}
+            caption={turnWord(draft.elevator)} />
+          {/* Picked, not slid: from the middle, flat, down to the left (−) and up to the right (+). */}
+          <div className="flight-steps">
+            {ELEVATOR_STEPS.map((d) => (
+              <button key={d} className={draft.elevator === d ? 'on' : ''} onClick={() => edit({ elevator: d })}>
+                {d > 0 ? `+${d}` : d < 0 ? `−${-d}` : '0'}
+              </button>
+            ))}
+          </div>
+          <div className="flight-marks"><span>− 내림</span><span>평평</span><span>올림 +</span></div>
+
+          <h3>날개 각도 <span className="flight-value">수평에서 {Math.abs(draft.vee)}° {draft.vee >= 0 ? '위' : '아래'}</span>
+            {Math.round(measuredVee) !== draft.vee && (
+              <button className="link" onClick={() => edit({ vee: Math.round(measuredVee) })}>접은 그대로 {Math.round(measuredVee)}°</button>
+            )}
+          </h3>
+          <PaperPreview3D af={spec.af} plies={draftPlies} vee={draft.vee} focus="wings"
+            caption={`수평에서 ${Math.abs(draft.vee)}° ${draft.vee >= 0 ? '위' : '아래'}`} />
+          <Slider value={draft.vee} min={-10} max={30} step={1} marks={['아래 10°', '위 10°', '위 30°']} onChange={(v) => edit({ vee: v })} />
+
+          <button className="primary flight-apply-all" disabled={!dirty} onClick={applyDraft}>
+            {dirty ? '적용하기' : '적용됨'}
+          </button>
         </section>}
 
         {view === 'tunnel' ? (
           <section className="flight-results flight-tunnel-view">
-            <WindTunnel af={af} m={m} drawPlies={shownPlies ?? plies}
-              elevatorDeg={elevator} vee={vee} launch={launch} />
+            <WindTunnel af={simReport.af} m={simReport.m} drawPlies={shownPlies ?? plies}
+              elevatorDeg={elevator} vee={vee} launch={simReport.launch} />
           </section>
         ) : (
         <section className="flight-results">

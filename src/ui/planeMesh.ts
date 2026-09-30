@@ -10,6 +10,7 @@ import type { Airframe } from '../aero/airframe.js';
 import type { Vec3 } from '../geometry/math.js';
 import type { RenderFace } from '../origami/space.js';
 import { liftWings } from './flightReport.js';
+import { foldBands } from './foldBands.js';
 
 /** Body axes (x forward, y right, z down) to the scene's (x forward, y up, z right). */
 export const scene3 = (q: Vec3): THREE.Vector3 => new THREE.Vector3(q[0], -q[2], q[1]);
@@ -29,6 +30,11 @@ export function planeMeshes(af: Airframe, drawPlies: readonly RenderFace[], veeD
       const b = pts[(i + 1) % pts.length]!;
       edges.push(a.x, a.y, a.z, b.x, b.y, b.z);
     }
+  }
+  // The paper turning round at each closed fold, as on the folding screen.
+  for (const q of foldBands(drawPlies)) {
+    const v = scene3(vee(af.frame.toBody(q)));
+    pos.push(v.x, v.y, v.z);
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));

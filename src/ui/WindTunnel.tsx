@@ -19,7 +19,7 @@ import { Tunnel3D } from './Tunnel3D.js';
 import type { Airframe } from '../aero/airframe.js';
 import { fly, forcesAt } from '../aero/flight.js';
 import type { AeroModel, Launch } from '../aero/flight.js';
-import { throwsAround } from './flightStats.js';
+import { KIND_NAMES, throwsAround } from './flightStats.js';
 import type { RenderFace } from '../origami/space.js';
 import { PHASE_COLOURS, PHASE_NAMES, PHASE_TIPS, momentAt, phaseAt } from './flightPhase.js';
 import { FlightScene3D } from './FlightScene3D.js';
@@ -56,6 +56,13 @@ export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, launch }: Props
   const [seed, setSeed] = useState(1);
   const flight = useMemo(() => fly(af, m, throwsAround(launch, 1, seed)[0]!, 0.004), [af, m, launch, seed]);
   const total = flight.time;
+  /*
+   * The throws made here so far, each counted once it has been watched to the
+   * ground: how many, the average and the best. A new setting starts afresh.
+   */
+  const [log, setLog] = useState<{ key: Launch; times: number[] }>({ key: launch, times: [] });
+  const times = log.key === launch ? log.times : [];
+  const counted = useRef<unknown>(null);
   const playNext = useRef(false);
   const throwAgain = () => { playNext.current = true; setSeed((x) => (x * 7919 + 104729) % 2147483647 || 1); };
 
@@ -76,12 +83,19 @@ export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, launch }: Props
       last = now;
       const next = Math.min(total, clock.current + dt * rate.current);
       setT(next);
-      if (next >= total) { setPlaying(false); return; }
+      if (next >= total) {
+        setPlaying(false);
+        if (counted.current !== flight) {
+          counted.current = flight;
+          setLog((l) => ({ key: launch, times: [...(l.key === launch ? l.times : []), total] }));
+        }
+        return;
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [playing, flight, total]);
+  }, [playing, flight, total, launch]);
 
   const moment = useMemo(() => (flight ? momentAt(flight.path, t) : null), [flight, t]);
 
@@ -91,8 +105,9 @@ export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, launch }: Props
 
   const speed = moment.speed ?? 0;
   const alpha = moment.alpha ?? 0;
-  const gamma = moment.gamma ?? 0;
-  const bank = moment.bank ?? 0;
+  // The path's angle runs on round a loop (360° and more); shown as it points now.
+  const gamma = Math.atan2(Math.sin(moment.gamma ?? 0), Math.cos(moment.gamma ?? 0));
+  const bank = Math.atan2(Math.sin(moment.bank ?? 0), Math.cos(moment.bank ?? 0));
   const lift = moment.lift ?? 0;
   const drag = moment.drag ?? 0;
   const f = forcesAt(af, m, alpha, Math.max(0.3, speed), de);
@@ -124,17 +139,29 @@ export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, launch }: Props
           }} />
         </div>
 
-        <dl className="tunnel-facts sim-facts">
+        <div className="sim-facts">
+        <dl className="tunnel-facts sim-record">
+          <dt>이번 비행</dt><dd>{KIND_NAMES.find(([k]) => k === flight.kind)?.[1] ?? ''}</dd>
+          <dt>체공 시간</dt><dd>{total.toFixed(1)}초</dd>
+          <dt>가장 높이</dt><dd>{flight.maxHeight.toFixed(1)}m</dd>
+          <dt>날아간 거리</dt><dd>{Math.abs(flight.distance).toFixed(1)}m{flight.distance < 0 ? " (돌아서 뒤쪽)" : ""}</dd>
+          {times.length > 0 && <dt>던진 기록</dt>}
+          {times.length > 0 && (
+            <dd>{times.length}번 · 평균 {(times.reduce((a, b) => a + b, 0) / times.length).toFixed(1)}초 · 최고 {Math.max(...times).toFixed(1)}초</dd>
+          )}
+        </dl>
+        <dl className="tunnel-facts">
           <dt>높이</dt><dd>{moment.h.toFixed(1)}m</dd>
           <dt>바람 (비행 속도)</dt><dd>초속 {speed.toFixed(1)}m · 시속 {Math.round(speed * 3.6)}km</dd>
           <dt>날개 각도 (받음각)</dt><dd>{deg(alpha).toFixed(1)}°</dd>
-          <dt>{gamma >= 0 ? '올라가는 각도' : '내려가는 각도'}</dt><dd>{Math.abs(deg(gamma)).toFixed(0)}°</dd>
+          <dt>{gamma >= 0 ? '올라가는 각도' : '내려가는 각도'}</dt><dd>{Math.abs(deg(gamma)).toFixed(0)}°{Math.abs(deg(gamma)) > 90 ? ' (뒤집혀 돌아요 · 루프)' : ''}</dd>
           <dt>옆으로 기운 각도</dt><dd>{Math.abs(deg(bank)).toFixed(0)}°{Math.abs(deg(bank)) > 60 ? ' (옆으로 누워 있어요)' : ''}</dd>
           <dt>양력</dt><dd>{grams(lift).toFixed(1)}g · 비행기 무게의 {(lift / weight).toFixed(1)}배</dd>
           <dt>항력 (공기 저항)</dt><dd>{grams(drag).toFixed(2)}g</dd>
           <dt>머리 움직임</dt><dd>{pitchWord}</dd>
           <dt>실속</dt><dd>{Math.abs(alpha) > m.stall ? '날개 위 공기가 떨어져 나가요 (실속)' : '공기가 날개를 잘 따라 흘러요'}</dd>
         </dl>
+        </div>
       </div>
 
       <div className="tunnel-controls">

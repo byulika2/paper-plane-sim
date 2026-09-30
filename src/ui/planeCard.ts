@@ -256,20 +256,16 @@ export function cardFlight(r: PlaneRecord): CardFlight | null {
   const { paper, spec, af } = modelOf(r);
   let out: CardFlight | null = null;
   if (spec && af && af.wingArea > 1e-6 && af.meanChord > 1e-6) {
-    // Never tuned, it is judged at the elevator recommended for this throw.
     /*
-     * Every plane is judged at the angle and elevator that suit it now: the
-     * elevator is only ever the recommended one, and one worked out under
-     * older sums, held to, turned good planes into zeros when the sums changed.
+     * Judged untuned: its own paper as it was folded, the elevator flat, at
+     * its throw angle. A plane that lifts hard loops and gives its height
+     * away, and that is its score - the elevator is tried in the simulator.
+     * The recommended elevator is still worked out, but only to be shown.
      */
-    const best = recommendThrow({ ...r, elevator: undefined });
-    const thrown = { ...DEFAULT_FLIGHT, angle: best?.angle ?? r.throwAngle ?? DEFAULT_FLIGHT.angle };
-    const e = best?.elevator ?? recommendFor(r, thrown)!;
-    const region = { y0: e.fromCm / 100, y1: (e.fromCm + e.widthCm) / 100, depth: e.depthCm / 100 };
-    const base = flightBase(spec, region);
-    const settings = { ...thrown, region, vee: r.vee ?? null };
-    const elevator = e.angleDeg;
-    const rep = flightReport(base, spec, paper, { ...settings, elevator });
+    const thrown = { ...DEFAULT_FLIGHT, angle: r.throwAngle ?? DEFAULT_FLIGHT.angle };
+    const e = recommendFor(r, thrown)!;
+    const base = flightBase(spec);
+    const rep = flightReport(base, spec, paper, { ...thrown, vee: r.vee ?? null, elevator: 0 });
     const results = runThrows(rep.af, rep.m, throwsAround(rep.launch, CARD_THROWS), 0, CARD_THROWS);
     const stats = summarize(results, spec, paper);
     out = { time: stats.time.mean, glideRatio: stats.glideRatio, weight: af.mass.mass * 1000, height: stats.height.mean, grades: [...stats.grades, balanceGrade(rep.margin)], elevator: e, angle: thrown.angle, recommended: true };

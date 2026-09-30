@@ -38,12 +38,22 @@ export interface ElevatorTune {
 }
 
 /**
- * Where to start: half a centimetre deep, a centimetre wide, beside the body.
+ * Where the elevator is, always: from the middle of the trailing edge, where
+ * the two wings meet, 1.5 cm out along each wing and 3 mm in from the edge.
+ * Only its angle is tuned.
+ */
+export const ELEVATOR = { fromCm: 0, widthCm: 1.5, depthCm: 0.3 } as const;
+
+/** The angles it can be set to, degrees: flat in the middle, down (−) and up (+) either side. */
+export const ELEVATOR_STEPS = [-30, -20, -10, -5, 0, 5, 10, 20, 30] as const;
+
+/**
+ * Where to start: the elevator above.
  * A nose thick on top pitches the aeroplane up when it is fast, so the edge
  * starts bent down ten degrees; thick underneath, up ten; flat, not at all.
  */
 export function defaultElevator(bulgeSide: -1 | 0 | 1): ElevatorTune {
-  return { fromCm: 1, widthCm: 1, depthCm: 0.5, angleDeg: bulgeSide > 0 ? -10 : bulgeSide < 0 ? 10 : 0 };
+  return { ...ELEVATOR, angleDeg: bulgeSide > 0 ? -10 : bulgeSide < 0 ? 10 : 0 };
 }
 
 /** How far the trailing edge itself rises (+) or drops (-), mm. */

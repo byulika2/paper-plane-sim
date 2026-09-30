@@ -2,6 +2,7 @@
  * The parts of a throw, as the wind tunnel names them.
  */
 
+import type { Vec3 } from '../geometry/math.js';
 import type { Flight, FlightPoint } from '../aero/flight.js';
 
 export type Phase = 'climb' | 'transition' | 'turn' | 'glide';
@@ -29,7 +30,9 @@ export const PHASE_TIPS: Record<Phase, string> = {
 export function phaseAt(flight: Flight, p: FlightPoint): Phase {
   if (p.t <= flight.apexTime) return 'climb';
   if (flight.levelTime === null || p.t < flight.levelTime) return 'transition';
-  return Math.abs(p.bank ?? 0) > (15 * Math.PI) / 180 ? 'turn' : 'glide';
+  // The bank is carried on round whole turns; read as it points now.
+  const b = p.bank ?? 0;
+  return Math.abs(Math.atan2(Math.sin(b), Math.cos(b))) > (15 * Math.PI) / 180 ? 'turn' : 'glide';
 }
 
 /** The recorded moment at or just before `t`. */
@@ -44,6 +47,14 @@ export function pointAt(path: readonly FlightPoint[], t: number): FlightPoint {
   for (let i = lo; i >= 0; i--) if (path[i]!.speed !== undefined) return path[i]!;
   for (let i = lo; i < path.length; i++) if (path[i]!.speed !== undefined) return path[i]!;
   return path[lo]!;
+}
+
+/** Two directions mixed and made unit again. */
+function blend(x: Vec3 | undefined, y: Vec3 | undefined, u: number): Vec3 | undefined {
+  if (!x || !y) return x;
+  const w: Vec3 = [x[0] + (y[0] - x[0]) * u, x[1] + (y[1] - x[1]) * u, x[2] + (y[2] - x[2]) * u];
+  const n = Math.hypot(w[0], w[1], w[2]);
+  return n > 1e-9 ? [w[0] / n, w[1] / n, w[2] / n] : x;
 }
 
 /**
@@ -70,5 +81,6 @@ export function momentAt(path: readonly FlightPoint[], t: number): FlightPoint {
     t, x: a.x + (b.x - a.x) * u, h: a.h + (b.h - a.h) * u, pitch: a.pitch + (b.pitch - a.pitch) * u,
     speed: mix(a.speed, b.speed), alpha: mix(a.alpha, b.alpha), gamma: turn(a.gamma, b.gamma), bank: mix(a.bank, b.bank),
     lift: mix(a.lift, b.lift), drag: mix(a.drag, b.drag), gx: mix(a.gx, b.gx), gy: mix(a.gy, b.gy), heading: turn(a.heading, b.heading),
+    fwd: blend(a.fwd, b.fwd, u), up: blend(a.up, b.up, u),
   };
 }

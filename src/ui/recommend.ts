@@ -15,7 +15,7 @@
 
 import type { PlaneSpec } from '../aero/spec.js';
 import type { PaperProps } from '../paper/stock.js';
-import { defaultElevator } from './elevator.js';
+import { ELEVATOR, ELEVATOR_STEPS, defaultElevator } from './elevator.js';
 import type { ElevatorTune } from './elevator.js';
 import { flightBase, flightReport } from './flightReport.js';
 import type { FlightSettings } from './flightReport.js';
@@ -46,11 +46,9 @@ const FINALISTS = 5;
 const FLIES = 0.5;
 const flew = (kind: string) => kind === 'transition' || kind === 'glide';
 /*
- * The edge is bent over a centimetre first. A bend that has to be steep to
- * do its work is also tried spread over a longer stretch, as it is by hand:
- * the same push from a gentler bend.
+ * The elevator's size is fixed (ELEVATOR): only its angle is searched.
  */
-const WIDTHS = [1, 2, 3] as const;
+const WIDTHS = [ELEVATOR.widthCm] as const;
 const STEEP = 15;
 
 const regionOf = (t: ElevatorTune) => ({ y0: t.fromCm / 100, y1: (t.fromCm + t.widthCm) / 100, depth: t.depthCm / 100 });
@@ -80,9 +78,9 @@ function screen(
     const x = judge(a); const y = judge(b);
     return x.flies !== y.flies ? x.flies : x.time > y.time + 1e-6;
   };
+  // Only the angles the pupil can pick: a recommendation of 13° matched no button.
   let top = 0;
-  for (let d = -28; d <= 28; d += 4) if (better(d, top)) top = d;
-  for (let d = top - 2; d <= top + 2; d += 1) judge(d);
+  for (const d of ELEVATOR_STEPS) if (better(d, top)) top = d;
   return [...tried].map(([angleDeg, j]) => ({ tune: { ...start, angleDeg }, ...j }));
 }
 
