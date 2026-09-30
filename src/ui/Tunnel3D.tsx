@@ -101,6 +101,7 @@ export function Tunnel3D(props: Props) {
     let specks: { path: THREE.Vector3[]; phase: number }[] = [];
     let points: THREE.Points | null = null;
     let lastAir = '';
+    const centre = new THREE.Vector3();
 
     const clear = (g: THREE.Group) => {
       for (const c of [...g.children]) {
@@ -122,6 +123,10 @@ export function Tunnel3D(props: Props) {
       reach = Math.max(af.span, af.length, 0.08);
       // The wings lifted into their V about the keel, as on the flying screen.
       for (const o of planeMeshes(af, p.drawPlies, p.vee)) plane.add(o);
+      // The middle of the model, not its balance point, is what the camera is held on.
+      plane.rotation.set(0, 0, 0);
+      plane.updateMatrixWorld(true);
+      new THREE.Box3().setFromObject(plane).getCenter(centre);
       pose();
     };
 
@@ -207,8 +212,8 @@ export function Tunnel3D(props: Props) {
 
     const view = (dir: Vec3) => {
       const d = new THREE.Vector3(...dir).normalize();
-      camera.position.copy(d.multiplyScalar(reach * 3.4));
-      controls.target.set(0, 0, 0);
+      camera.position.copy(centre).add(d.multiplyScalar(reach * 3.4));
+      controls.target.copy(centre);
       camera.up.set(0, 1, 0);
       controls.update();
     };

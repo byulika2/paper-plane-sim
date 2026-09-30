@@ -16,7 +16,6 @@ import type { PlaneSpec } from '../aero/spec.js';
 import type { RenderFace } from '../origami/space.js';
 import type { PaperProps } from '../paper/stock.js';
 import { elevatorRiseMm } from './elevator.js';
-import { THROW_ANGLES } from './planeCard.js';
 import type { ElevatorTune } from './elevator.js';
 import { KIND_TEXT, balanceGrade, canFly, flightBase, flightReport } from './flightReport.js';
 import type { FlightSettings } from './flightReport.js';
@@ -25,6 +24,7 @@ import {
 } from './flightStats.js';
 import type { FlightStats, ThrowResult } from './flightStats.js';
 import { WindTunnel } from './WindTunnel.js';
+import { PaperPreview3D } from './PaperPreview3D.js';
 
 interface Props {
   /** The measured plane it flies (see `measurePlane`). */
@@ -287,13 +287,13 @@ function FlightField({
           <p className="flight-hint">나이별 값은 공 던지기 연구로 어림한 거예요. 사람마다 달라요.</p>
 
           <h3>던지는 각도</h3>
-          <div className="flight-choices">
-            {THROW_ANGLES.map((d) => (
-              <button key={d} className={angle === d ? 'on' : ''} onClick={() => setAngle(d)}>
-                {d}°{recommendedAngle === d ? ' (추천)' : ''}
-              </button>
-            ))}
-          </div>
+          <Slider value={angle} min={30} max={90} step={10} onChange={setAngle} />
+          <p className="flight-value">
+            {angle}°{recommendedAngle === angle ? ' (추천)' : ''}
+            {recommendedAngle && recommendedAngle !== angle && (
+              <button className="link" onClick={() => setAngle(recommendedAngle)}>추천 {recommendedAngle}°로</button>
+            )}
+          </p>
           <p className="flight-hint">
             {recommendedAngle
               ? `이 비행기는 ${recommendedAngle}°로 던질 때 가장 오래 날아요.`
@@ -332,20 +332,12 @@ function FlightField({
             * Not a setting: the elevator is the one worked out for this throw,
             * shown so the pupil can bend the paper to match it.
             */}
-          <p className="flight-hint">
-            엘리베이터: 날개 뒤끝을 살짝 휘어 올리거나 내린 곳이에요. 접는 게 아니라 종이가 둥글게 휘어요.
-          </p>
           {recommended && (
             <div className="flight-recommend">
               <p>
                 <b>추천 엘리베이터</b> · 가운데에서 {recommended.fromCm}cm · 가로 {recommended.widthCm}cm ·{' '}
                 {recommended.angleDeg > 0 ? `올림 ${recommended.angleDeg}°` : recommended.angleDeg < 0 ? `내림 ${-recommended.angleDeg}°` : '평평'}
                 {recommended.angleDeg !== 0 && ` (뒤끝 ${Math.abs(elevatorRiseMm(recommended)).toFixed(1)}mm)`}
-              </p>
-              <p className="flight-hint">
-                {ownElevator
-                  ? '지금은 직접 바꾼 값으로 날려요. 바꾼 값은 비행기에 저장되지 않아요.'
-                  : '가장 오래 나는 값이에요. 던지는 힘을 바꾸고 ‘다시 계산’을 누르면 추천도 다시 찾아요.'}
               </p>
               {ownElevator && onUseRecommended && (
                 <button className="primary flight-recommend-use" onClick={onUseRecommended}>추천값으로 돌아가기</button>
@@ -373,12 +365,16 @@ function FlightField({
               ))}
             </div>
           )}
+          {/* The real paper's trailing edge, from behind, bent as it is set. */}
+          <PaperPreview3D af={spec.af} plies={shownPlies ?? plies} vee={vee} focus="elevator" region={elevatorTune} />
           <Slider value={elevator} min={-30} max={30} step={0.5} onChange={(v) => set({ elevator: v })} />
           <p className="flight-value">
             {elevator > 0 ? `올림 ${elevator}°` : elevator < 0 ? `내림 ${-elevator}°` : '평평'}
             {elevatorTune && elevator !== 0 && ` · 뒤끝 ${Math.abs(elevatorRiseMm({ ...elevatorTune, angleDeg: elevator })).toFixed(1)}mm`}
           </p>
           <p className="flight-hint">날개 V자 각도: 두 날개를 평평하게 편 것을 0°로 보고, 양쪽 날개가 위로 올라간 각도를 더한 거예요.</p>
+          {/* The whole aeroplane from behind, its wings in the V set. */}
+          <PaperPreview3D af={spec.af} plies={shownPlies ?? plies} vee={vee} focus="wings" />
           <Slider value={vee * 2} min={-20} max={60} step={2} onChange={(v) => setVee(v / 2)} />
           <p className="flight-value">
             {vee >= 0 ? `날개 V자 ${vee * 2}°` : `날개가 아래로 ${-vee * 2}° 처짐`}
