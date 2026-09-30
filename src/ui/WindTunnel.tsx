@@ -20,6 +20,8 @@ import type { Airframe } from '../aero/airframe.js';
 import { forcesAt } from '../aero/flight.js';
 import type { AeroModel, Flight, FlightPoint } from '../aero/flight.js';
 import type { RenderFace } from '../origami/space.js';
+import { PHASE_NAMES, PHASE_TIPS, phaseAt } from './flightPhase.js';
+import type { Phase } from './flightPhase.js';
 
 interface Props {
   af: Airframe;
@@ -36,32 +38,6 @@ interface Props {
 const G = 9.81;
 const grams = (n: number) => (n / G) * 1000;
 const deg = (r: number) => (r * 180) / Math.PI;
-
-export type Phase = 'climb' | 'transition' | 'turn' | 'glide';
-export const PHASE_NAMES: Record<Phase, string> = {
-  climb: '던짐 · 올라가기',
-  transition: '꼭대기 · 트랜지션',
-  turn: '선회',
-  glide: '활공',
-};
-const PHASE_TIPS: Record<Phase, string> = {
-  climb: '손을 떠난 빠른 속도로 옆으로 누워 올라가요. 공기 저항이 커서 속도가 빨리 줄어요.',
-  transition: '가장 느린 순간이에요. 코가 숙여지고 V자 날개 덕분에 수평으로 돌아와요.',
-  turn: '날개가 기울어 양력 일부가 방향을 틀어요. 원을 그리며 내려가요.',
-  glide: '양력이 무게와 거의 같아요. 저항만큼 천천히 내려가요.',
-};
-
-/**
- * Which part of the flight a moment is in: before the top, the climb; from
- * the top until it has come level, the transition (the same moment the
- * transition score is taken at); after that, turning while it is banked more
- * than fifteen degrees, gliding while it is not.
- */
-export function phaseAt(flight: Flight, p: FlightPoint): Phase {
-  if (p.t <= flight.apexTime) return 'climb';
-  if (flight.levelTime === null || p.t < flight.levelTime) return 'transition';
-  return Math.abs(p.bank ?? 0) > (15 * Math.PI) / 180 ? 'turn' : 'glide';
-}
 
 /** The recorded moment at or just before `t`. */
 function pointAt(path: readonly FlightPoint[], t: number): FlightPoint {
@@ -98,7 +74,7 @@ export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, flight }: Props
     let raf = 0;
     let last = performance.now();
     const tick = (now: number) => {
-      const dt = Math.min(0.1, (now - last) / 1000);
+      const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
       last = now;
       const next = Math.min(total, clock.current + dt * rate.current);
       setT(next);
@@ -126,23 +102,24 @@ export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, flight }: Props
   const pitchWord = Math.abs(f.cm) < 0.004 ? '거의 없어요'
     : `${f.cm > 0 ? '머리를 드는' : '머리를 숙이는'} 힘이 ${Math.abs(f.cm) < 0.02 ? '조금' : '세게'} 있어요`;
 
-  // The throw seen from the side, the moment marked on it.
+  /*
+   * Height against time, the moment marked on it. Against distance, a throw
+   * that climbs in a spiral and turns as it glides doubled back over itself
+   * and could not be read.
+   */
   const pts = flight.path;
-  const xs = pts.map((p) => p.x);
-  const minX = Math.min(0, ...xs);
-  const maxX = Math.max(0.5, ...xs);
   const maxH = Math.max(1, ...pts.map((p) => p.h));
   const W = 320; const H = 150; const pad = 8;
-  const sx = (x: number) => pad + ((x - minX) / (maxX - minX || 1)) * (W - 2 * pad);
+  const sx = (time: number) => pad + (time / (total || 1)) * (W - 2 * pad);
   const sy = (h: number) => H - pad - (h / maxH) * (H - 2 * pad);
   const colour: Record<Phase, string> = { climb: '#f59e0b', transition: '#ef4444', turn: '#a78bfa', glide: '#22c55e' };
   const segments: { phase: Phase; d: string }[] = [];
   for (let i = 1; i < pts.length; i++) {
     const ph = phaseAt(flight, pts[i]!);
-    const seg = `L${sx(pts[i]!.x).toFixed(1)},${sy(pts[i]!.h).toFixed(1)}`;
+    const seg = `L${sx(pts[i]!.t).toFixed(1)},${sy(pts[i]!.h).toFixed(1)}`;
     const lastSeg = segments[segments.length - 1];
     if (lastSeg && lastSeg.phase === ph) lastSeg.d += seg;
-    else segments.push({ phase: ph, d: `M${sx(pts[i - 1]!.x).toFixed(1)},${sy(pts[i - 1]!.h).toFixed(1)}${seg}` });
+    else segments.push({ phase: ph, d: `M${sx(pts[i - 1]!.t).toFixed(1)},${sy(pts[i - 1]!.h).toFixed(1)}${seg}` });
   }
 
   return (
@@ -162,10 +139,10 @@ export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, flight }: Props
           <input type="range" min={0} max={total} step={0.02} value={t}
             onChange={(e) => { setPlaying(false); setT(Number(e.target.value)); }} />
         </label>
-        <svg className="tunnel-path" viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="옆에서 본 비행 경로">
+        <svg className="tunnel-path" viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="시간에 따른 높이">
           <line x1={0} y1={sy(0)} x2={W} y2={sy(0)} stroke="#334155" />
           {segments.map((s, i) => <path key={i} d={s.d} fill="none" stroke={colour[s.phase]} strokeWidth={2} />)}
-          <circle cx={sx(moment.x)} cy={sy(moment.h)} r={5} fill="#fff" stroke="#0f172a" strokeWidth={2} />
+          <circle cx={sx(t)} cy={sy(moment.h)} r={5} fill="#fff" stroke="#0f172a" strokeWidth={2} />
         </svg>
         <div className="tunnel-legend">
           {(Object.keys(PHASE_NAMES) as Phase[]).map((k) => (

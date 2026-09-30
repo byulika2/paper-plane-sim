@@ -142,10 +142,11 @@ export function Tunnel3D(props: Props) {
       const p = live.current;
       const { af } = p;
       clear(forces); clear(air);
-      const bank = p.bank ?? 0;
-      const gamma = p.gamma ?? 0;
+      const finite = (v: number | undefined) => (v !== undefined && Number.isFinite(v) ? v : 0);
+      const bank = finite(p.bank);
+      const gamma = finite(p.gamma);
       // Pitched nose-up about the span and rolled onto its side, the air still coming straight at it.
-      plane.rotation.set(bank, 0, p.alpha, 'XYZ');
+      plane.rotation.set(bank, 0, finite(p.alpha), 'XYZ');
 
       // Forces from the centre of gravity, in the air's axes: lift square to
       // the stream, drag along it, weight straight down. One scale for all.
@@ -157,15 +158,16 @@ export function Tunnel3D(props: Props) {
       };
       // Lift square to the stream and tipped with the wings; weight straight down,
       // which against a stream climbing at gamma leans back along it.
-      tips.lift = arrow(new THREE.Vector3(0, Math.cos(bank), Math.sin(bank)), Math.max(0, p.lift), 0x22c55e);
+      tips.lift = arrow(new THREE.Vector3(0, Math.cos(bank), Math.sin(bank)), Math.max(0, finite(p.lift)), 0x22c55e);
       // Drag drawn four times over, or it is too short to see.
-      tips.drag = arrow(new THREE.Vector3(-1, 0, 0), p.drag * 4, 0xf59e0b);
+      tips.drag = arrow(new THREE.Vector3(-1, 0, 0), finite(p.drag) * 4, 0xf59e0b);
       tips.weight = arrow(new THREE.Vector3(-Math.sin(gamma), -Math.cos(gamma), 0), p.weight, 0xef4444);
 
       // The air: rows of specks across the span and above and below it.
       const half = af.span / 2;
-      const down = Math.max(-0.45, Math.min(0.45, p.cl * 0.22));
-      const swirl = Math.min(1, Math.abs(p.cl)) * 0.6;
+      const cl = finite(p.cl);
+      const down = Math.max(-0.45, Math.min(0.45, cl * 0.22));
+      const swirl = Math.min(1, Math.abs(cl)) * 0.6;
       specks = [];
       const x0 = reach * 1.1;
       const x1 = -reach * 1.5;
@@ -183,7 +185,7 @@ export function Tunnel3D(props: Props) {
             const behind = Math.max(0, (af.length * 0.35 - x) / reach);
             if (inside) y -= down * behind * reach * (h > 0 ? 1 : 0.8);
             // Over the top, lifted a little as it meets the wing.
-            if (x < af.length * 0.5 && x > -af.length * 0.6 && h > 0) y += 0.004 * Math.max(0, p.cl);
+            if (x < af.length * 0.5 && x > -af.length * 0.6 && h > 0) y += 0.004 * Math.max(0, cl);
             if (p.stalled && h > 0 && inside && x < 0) y += Math.sin(i * 0.9) * 0.01 + 0.006;
             // Round each tip: a corkscrew that grows behind it.
             if (nearTip && behind > 0) {
@@ -241,7 +243,10 @@ export function Tunnel3D(props: Props) {
       e.style.top = `${((1 - pr.y) / 2) * mount.clientHeight}px`;
     };
     const tick = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
+      // The next frame is asked for first: one bad moment must not stop the tunnel for good.
+      raf = requestAnimationFrame(tick);
+      // A frame's time can come in a hair before the last one read: never backwards.
+      const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
       last = now;
       // The specks drift at a pace that reads, not at the wind's real speed.
       if (points) {
@@ -249,12 +254,14 @@ export function Tunnel3D(props: Props) {
         let k = 0;
         for (const s of specks) {
           // Faster air, faster specks: a throw's rush and a glide's drift read apart.
-          const pace = live.current.airSpeed ? Math.min(0.9, Math.max(0.05, 0.18 * (live.current.airSpeed / 5))) : 0.18;
+          const air = live.current.airSpeed;
+          const pace = air !== undefined && Number.isFinite(air) && air > 0 ? Math.min(0.9, Math.max(0.05, 0.18 * (air / 5))) : 0.18;
           s.phase = (s.phase + dt * pace) % 1;
+          if (!Number.isFinite(s.phase)) s.phase = 0;
           for (let j = 0; j < 6; j++) {
             const t = (s.phase + j / 6) % 1;
             const f = t * (s.path.length - 1);
-            const i = Math.floor(f);
+            const i = Math.max(0, Math.min(s.path.length - 1, Math.floor(f)));
             const a = s.path[i]!;
             const b = s.path[Math.min(s.path.length - 1, i + 1)]!;
             const u = f - i;
@@ -273,7 +280,6 @@ export function Tunnel3D(props: Props) {
         label(ls[1], tips.drag);
         label(ls[2], tips.weight);
       }
-      raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
 
