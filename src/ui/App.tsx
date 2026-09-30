@@ -4,7 +4,7 @@ import { ALL_PLIES, affineApply, affineIdentity, affineInverse, layerOutline, po
 import type { PlySelection } from '../geometry/fold.js';
 import type { Vec2, Vec3 } from '../geometry/math.js';
 import { Dieline } from './Dieline.js';
-import { Stage3D, VIEWS } from './Stage3D.js';
+import { OBLIQUE, Stage3D, VIEWS } from './Stage3D.js';
 import type { StageMode } from './Stage3D.js';
 import { PlyPicker } from './PlyPicker.js';
 import { StepInspector } from './StepInspector.js';
@@ -155,7 +155,7 @@ export function App() {
   // way paper lies on the table to be folded - the list's cards show it at an angle.
   const [view, setView] = useState<{ key: number; dir: readonly [number, number, number] }>();
   const showAsPlane = useCallback(
-    () => setView((v) => ({ key: (v?.key ?? 0) + 1, dir: VIEWS[0]![1] })), []);
+    () => setView((v) => ({ key: (v?.key ?? 0) + 1, dir: OBLIQUE })), []);
   const anchorRef = useRef<number | null>(null);
   // Pointing at what is there is the safe first thing; drawing is a choice.
   const [tool, setTool] = useState<Tool>('select');
@@ -1653,7 +1653,8 @@ export function App() {
      * lying on its side - true to the folding, but not what anyone opening
      * one wants to see first.
      */
-    if (loaded.steps.some((st) => st.kind === 'fold' && !st.creaseOnly
+    // A finished one opens stood up whatever it is; one being folded, when its wings are out.
+    if (loaded.done !== false || loaded.steps.some((st) => st.kind === 'fold' && !st.creaseOnly
       && (st.angleDeg ?? 180) < 179.5)) setStandUp(true);
     if (replacing > 0) {
       announce(`${loaded.name ? `「${loaded.name}」을` : '작업을'} 열었습니다 — 하던 것은 ${replacing}단계`,
@@ -2047,6 +2048,8 @@ export function App() {
           editing
             ? <button className="topbar-mode" onClick={() => {
               setEditing(false); fold.cancel();
+              // Finished: shown as an aeroplane - stood up, from an angle.
+              setStandUp(true); showAsPlane();
               /*
                * Finished, it is tuned for the grown-up's throw it is judged by,
                * and saved so: the elevator that keeps it up longest.
