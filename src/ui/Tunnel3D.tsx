@@ -64,7 +64,8 @@ export function Tunnel3D(props: Props) {
   const live = useRef(props);
   live.current = props;
   const api = useRef<{ view(dir: Vec3): void; rebuild(): void; pose(): void } | null>(null);
-  const [viewName, setViewName] = useState('비스듬히');
+  // From the side the climb and the glide read at their true angles.
+  const [viewName, setViewName] = useState('옆에서');
 
   useEffect(() => {
     const mount = mountRef.current!;
@@ -82,12 +83,20 @@ export function Tunnel3D(props: Props) {
     scene.add(sun);
 
     // The model and its forces, rebuilt when the model or the angle changes.
+    /*
+     * Everything that moves with the flight, turned as a whole to the way the
+     * aeroplane is going: nose up the climb, down the glide. Inside it the
+     * air still comes straight at the nose; outside it, up is up, so a throw
+     * climbing at eighty degrees is seen going up, not lying on its side.
+     */
+    const world = new THREE.Group();
+    scene.add(world);
     const plane = new THREE.Group();
-    scene.add(plane);
+    world.add(plane);
     const forces = new THREE.Group();
-    scene.add(forces);
+    world.add(forces);
     const air = new THREE.Group();
-    scene.add(air);
+    world.add(air);
     let reach = 0.12;
     let specks: { path: THREE.Vector3[]; phase: number }[] = [];
     let points: THREE.Points | null = null;
@@ -147,6 +156,7 @@ export function Tunnel3D(props: Props) {
       const gamma = finite(p.gamma);
       // Pitched nose-up about the span and rolled onto its side, the air still coming straight at it.
       plane.rotation.set(bank, 0, finite(p.alpha), 'XYZ');
+      world.rotation.set(0, 0, gamma);
 
       // Forces from the centre of gravity, in the air's axes: lift square to
       // the stream, drag along it, weight straight down. One scale for all.
@@ -213,14 +223,14 @@ export function Tunnel3D(props: Props) {
 
     const view = (dir: Vec3) => {
       const d = new THREE.Vector3(...dir).normalize();
-      camera.position.copy(d.multiplyScalar(reach * 2.6));
+      camera.position.copy(d.multiplyScalar(reach * 3.4));
       controls.target.set(0, 0, 0);
       camera.up.set(0, 1, 0);
       controls.update();
     };
     api.current = { view, rebuild, pose };
     rebuild();
-    view(VIEWS[0]![1]);
+    view(VIEWS[1]![1]);
 
     const resize = () => {
       const w = mount.clientWidth;
@@ -237,7 +247,7 @@ export function Tunnel3D(props: Props) {
     let last = performance.now();
     const label = (el: Element | undefined, at: THREE.Vector3 | undefined) => {
       if (!el || !at) return;
-      const pr = at.clone().project(camera);
+      const pr = world.localToWorld(at.clone()).project(camera);
       const e = el as HTMLElement;
       e.style.left = `${((pr.x + 1) / 2) * mount.clientWidth}px`;
       e.style.top = `${((1 - pr.y) / 2) * mount.clientHeight}px`;
