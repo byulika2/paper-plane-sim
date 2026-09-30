@@ -875,11 +875,17 @@ input.scrub:hover { border-color: color-mix(in srgb, var(--accent) 55%, transpar
 .flight-kind span + span { margin-top: 2px; }
 
 /* The wind tunnel. */
-.tunnel { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px 16px; align-items: start; }
-.tunnel-controls { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: end; }
+.tunnel { display: flex; flex-direction: column; gap: 12px; }
+/* The room, the aeroplane close up and the numbers, side by side: one moment three ways. */
+.tunnel-row { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) 250px; gap: 12px; align-items: stretch; }
+.tunnel-row .flight-scene-stage, .tunnel-row .tunnel3d-stage { height: max(340px, calc(100vh - 360px)); }
+.tunnel-row .tunnel-facts { grid-column: auto; }
+@media (max-width: 1100px) { .tunnel-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .tunnel-row .tunnel-facts { grid-column: 1 / -1; } }
+@media (max-width: 760px) { .tunnel-row { grid-template-columns: 1fr; } }
+.tunnel-controls { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: end; }
 .tunnel-controls label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--dim); min-width: 220px; flex: 1 1 220px; }
 .tunnel-controls label b { color: var(--ink); font-size: 14px; }
-.flight-scene { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; }
+.flight-scene { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .flight-scene-stage { position: relative; height: 380px; background: var(--panel); border-radius: 8px; overflow: hidden; }
 .flight-scene-stage canvas { width: 100%; height: 100%; display: block; }
 .tunnel-phase { flex: 1 1 100%; display: flex; flex-direction: column; gap: 2px; padding: 8px 12px;

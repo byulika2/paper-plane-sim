@@ -339,7 +339,7 @@ function FlightField({
         <div className="subbar-group">
           <em>보기</em>
           <button className={view === 'results' ? 'on' : ''} onClick={() => setView('results')}>결과</button>
-          <button className={view === 'tunnel' ? 'on' : ''} onClick={() => setView('tunnel')}>바람 터널</button>
+          <button className={view === 'tunnel' ? 'on' : ''} onClick={() => setView('tunnel')}>시뮬레이터</button>
         </div>
         <div className="subbar-group">
           <em>100번 던지기</em>

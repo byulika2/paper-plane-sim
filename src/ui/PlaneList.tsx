@@ -133,6 +133,9 @@ interface Props {
   onTutorial(plane: BookPlane): void;
   onOpenBook(plane: BookPlane): void;
   onOpenShelf(plane: SavedPlane): void;
+  /** Straight to the flying screen: 열기 is the plane itself, this is throwing it. */
+  onFlyBook(plane: BookPlane): void;
+  onFlyShelf(plane: SavedPlane): void;
   onDropShelf(plane: SavedPlane): void;
   /** Take a book plane off the list (and the pupil's copy of it, if any). */
   onDropBook(plane: BookPlane): void;
@@ -140,7 +143,7 @@ interface Props {
 }
 
 export function PlaneList({
-  book, shelf, dropping, onTutorial, onOpenBook, onOpenShelf, onDropShelf, onDropBook, onNew,
+  book, shelf, dropping, onTutorial, onOpenBook, onOpenShelf, onFlyBook, onFlyShelf, onDropShelf, onDropBook, onNew,
 }: Props) {
   /*
    * One shelf. The book's planes are the pupil's planes too: folded further,
@@ -169,6 +172,9 @@ export function PlaneList({
                 title={mine ? '내가 마지막으로 접은 모양을 열어요.' : '완성된 모양을 열어요.'}>
                 {done ? '열기' : '이어 접기'}
               </button>
+              {done && (
+                <button onClick={() => (mine ? onFlyShelf(mine) : onFlyBook(plane))} title="바로 날려 봐요.">✈ 날려보기</button>
+              )}
               <button onClick={() => onTutorial(plane)}>▶ 튜토리얼 보기</button>
               <button className={dropping === plane.file ? 'danger' : ''}
                 onClick={() => onDropBook(plane)}
@@ -193,6 +199,7 @@ export function PlaneList({
           )} foot={(
           <div className="list-card-actions">
             <button className="primary" onClick={() => onOpenShelf(plane)}>{plane.done ? '열기' : '이어 접기'}</button>
+            {plane.done && <button onClick={() => onFlyShelf(plane)} title="바로 날려 봐요.">✈ 날려보기</button>}
             {/* A plane folded here has every step on record, so it can be followed like a book one. */}
             {plane.steps.length > 0 && (
               <button onClick={() => onTutorial({ name: plane.name, file: '', note: '' })}>▶ 튜토리얼 보기</button>

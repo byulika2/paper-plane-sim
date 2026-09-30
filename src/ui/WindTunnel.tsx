@@ -89,33 +89,39 @@ export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, flight }: Props
   const pitchWord = Math.abs(f.cm) < 0.004 ? '거의 없어요'
     : `${f.cm > 0 ? '머리를 드는' : '머리를 숙이는'} 힘이 ${Math.abs(f.cm) < 0.02 ? '조금' : '세게'} 있어요`;
 
-  /*
-   * Height against time, the moment marked on it. Against distance, a throw
-   * that climbs in a spiral and turns as it glides doubled back over itself
-   * and could not be read.
-   */
-  const pts = flight.path;
-  const maxH = Math.max(1, ...pts.map((p) => p.h));
-  const W = 320; const H = 150; const pad = 8;
-  const sx = (time: number) => pad + (time / (total || 1)) * (W - 2 * pad);
-  const sy = (h: number) => H - pad - (h / maxH) * (H - 2 * pad);
-  const colour = PHASE_COLOURS;
-  const segments: { phase: Phase; d: string }[] = [];
-  for (let i = 1; i < pts.length; i++) {
-    const ph = phaseAt(flight, pts[i]!);
-    const seg = `L${sx(pts[i]!.t).toFixed(1)},${sy(pts[i]!.h).toFixed(1)}`;
-    const lastSeg = segments[segments.length - 1];
-    if (lastSeg && lastSeg.phase === ph) lastSeg.d += seg;
-    else segments.push({ phase: ph, d: `M${sx(pts[i - 1]!.t).toFixed(1)},${sy(pts[i - 1]!.h).toFixed(1)}${seg}` });
-  }
-
   return (
     <div className="tunnel">
+      <div className="tunnel-phase" style={{ borderColor: PHASE_COLOURS[phase] }}>
+        <b style={{ color: PHASE_COLOURS[phase] }}>{PHASE_NAMES[phase]}</b>
+        <span>{PHASE_TIPS[phase]}</span>
+      </div>
+
+      <div className="tunnel-row">
+        <FlightScene3D af={af} drawPlies={drawPlies} vee={vee} flight={flight} t={t} colours={PHASE_COLOURS} />
+
+        <Tunnel3D af={af} drawPlies={drawPlies} alpha={alpha} bank={bank} gamma={gamma} airSpeed={speed}
+          vee={vee} cl={f.cl} stalled={f.stalled}
+          lift={Math.max(0, lift)} drag={drag} weight={weight} cm={f.cm}
+          labels={{
+            lift: `양력 ${grams(lift).toFixed(1)}g`,
+            drag: `항력 ${grams(drag).toFixed(1)}g`,
+            weight: `무게 ${grams(weight).toFixed(1)}g`,
+          }} />
+
+        <dl className="tunnel-facts">
+          <dt>높이</dt><dd>{moment.h.toFixed(1)}m</dd>
+          <dt>바람 (비행 속도)</dt><dd>초속 {speed.toFixed(1)}m · 시속 {Math.round(speed * 3.6)}km</dd>
+          <dt>날개 각도 (받음각)</dt><dd>{deg(alpha).toFixed(1)}°</dd>
+          <dt>{gamma >= 0 ? '올라가는 각도' : '내려가는 각도'}</dt><dd>{Math.abs(deg(gamma)).toFixed(0)}°</dd>
+          <dt>옆으로 기운 각도</dt><dd>{Math.abs(deg(bank)).toFixed(0)}°{Math.abs(deg(bank)) > 60 ? ' (옆으로 누워 있어요)' : ''}</dd>
+          <dt>양력</dt><dd>{grams(lift).toFixed(1)}g · 비행기 무게의 {(lift / weight).toFixed(1)}배</dd>
+          <dt>항력 (공기 저항)</dt><dd>{grams(drag).toFixed(2)}g</dd>
+          <dt>머리 움직임</dt><dd>{pitchWord}</dd>
+          <dt>실속</dt><dd>{Math.abs(alpha) > m.stall ? '날개 위 공기가 떨어져 나가요 (실속)' : '공기가 날개를 잘 따라 흘러요'}</dd>
+        </dl>
+      </div>
+
       <div className="tunnel-controls">
-        <div className="tunnel-phase" style={{ borderColor: colour[phase] }}>
-          <b style={{ color: colour[phase] }}>{PHASE_NAMES[phase]}</b>
-          <span>{PHASE_TIPS[phase]}</span>
-        </div>
         <div className="flight-choices">
           <button onClick={() => { if (t >= total) setT(0); setPlaying(!playing); }}>{playing ? '❚❚ 멈춤' : '▶ 재생'}</button>
           <button className={slow ? 'on' : ''} onClick={() => setSlow(!slow)}>느리게 (¼배)</button>
@@ -126,40 +132,12 @@ export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, flight }: Props
           <input type="range" min={0} max={total} step={0.02} value={t}
             onChange={(e) => { setPlaying(false); setT(Number(e.target.value)); }} />
         </label>
-        <svg className="tunnel-path" viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="시간에 따른 높이">
-          <line x1={0} y1={sy(0)} x2={W} y2={sy(0)} stroke="#334155" />
-          {segments.map((s, i) => <path key={i} d={s.d} fill="none" stroke={colour[s.phase]} strokeWidth={2} />)}
-          <circle cx={sx(t)} cy={sy(moment.h)} r={5} fill="#fff" stroke="#0f172a" strokeWidth={2} />
-        </svg>
         <div className="tunnel-legend">
           {(Object.keys(PHASE_NAMES) as Phase[]).map((k) => (
-            <span key={k}><i style={{ background: colour[k] }} />{PHASE_NAMES[k]}</span>
+            <span key={k}><i style={{ background: PHASE_COLOURS[k] }} />{PHASE_NAMES[k]}</span>
           ))}
         </div>
       </div>
-
-      <FlightScene3D af={af} drawPlies={drawPlies} vee={vee} flight={flight} t={t} colours={PHASE_COLOURS} />
-
-      <Tunnel3D af={af} drawPlies={drawPlies} alpha={alpha} bank={bank} gamma={gamma} airSpeed={speed}
-        vee={vee} cl={f.cl} stalled={f.stalled}
-        lift={Math.max(0, lift)} drag={drag} weight={weight} cm={f.cm}
-        labels={{
-          lift: `양력 ${grams(lift).toFixed(1)}g`,
-          drag: `항력 ${grams(drag).toFixed(1)}g`,
-          weight: `무게 ${grams(weight).toFixed(1)}g`,
-        }} />
-
-      <dl className="tunnel-facts">
-        <dt>높이</dt><dd>{moment.h.toFixed(1)}m</dd>
-        <dt>바람 (비행 속도)</dt><dd>초속 {speed.toFixed(1)}m · 시속 {Math.round(speed * 3.6)}km</dd>
-        <dt>날개 각도 (받음각)</dt><dd>{deg(alpha).toFixed(1)}°</dd>
-        <dt>{gamma >= 0 ? '올라가는 각도' : '내려가는 각도'}</dt><dd>{Math.abs(deg(gamma)).toFixed(0)}°</dd>
-        <dt>옆으로 기운 각도</dt><dd>{Math.abs(deg(bank)).toFixed(0)}°{Math.abs(deg(bank)) > 60 ? ' (옆으로 누워 있어요)' : ''}</dd>
-        <dt>양력</dt><dd>{grams(lift).toFixed(1)}g · 비행기 무게의 {(lift / weight).toFixed(1)}배</dd>
-        <dt>항력 (공기 저항)</dt><dd>{grams(drag).toFixed(2)}g</dd>
-        <dt>머리 움직임</dt><dd>{pitchWord}</dd>
-        <dt>실속</dt><dd>{Math.abs(alpha) > m.stall ? '날개 위 공기가 떨어져 나가요 (실속)' : '공기가 날개를 잘 따라 흘러요'}</dd>
-      </dl>
     </div>
   );
 }

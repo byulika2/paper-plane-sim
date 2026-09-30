@@ -2127,6 +2127,24 @@ export function App() {
               setSessionError(e instanceof Error ? e.message : '열 수 없습니다.');
             }
           }}
+          onFlyBook={(plane) => {
+            setTutorial(null);
+            setScreen('fold');
+            setShowDieline(false);
+            void openFromUrl(plane.file).then(() => setShowFlight(true));
+          }}
+          onFlyShelf={(plane) => {
+            try {
+              setTutorial(null);
+              adoptSession(plane);
+              setPlaneName(plane.name);
+              setScreen('fold');
+              setShowDieline(false);
+              setShowFlight(true);
+            } catch (e) {
+              setSessionError(e instanceof Error ? e.message : '열 수 없습니다.');
+            }
+          }}
           onDropBook={(plane) => {
             if (dropping !== plane.file) { setDropping(plane.file); return; }
             const copy = shelf.find((p) => sameName(p.name, plane.name));
