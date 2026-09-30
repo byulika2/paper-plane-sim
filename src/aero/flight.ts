@@ -331,6 +331,10 @@ export interface FlightPoint {
   readonly bank?: number;
   readonly lift?: number;
   readonly drag?: number;
+  /** Where it is over the floor, m - along the throw and to its side - and the way it is heading, radians. */
+  readonly gx?: number;
+  readonly gy?: number;
+  readonly heading?: number;
 }
 
 export type FlightKind = 'transition' | 'glide' | 'stall' | 'loop' | 'dive' | 'short';
@@ -629,6 +633,7 @@ export function fly(af: Airframe, m: AeroModel, launch: Launch, dt = 0.004): Fli
       path.push({
         t, x: Math.hypot(g.x, g.y) * Math.sign(g.x || 1), h: Math.max(0, g.h), pitch,
         speed: k1.V, alpha: k1.alpha, gamma: st[1]!, bank: st[5]!, lift: k1.L, drag: k1.D,
+        gx: g.x, gy: g.y, heading: st[2]!,
       });
     }
     if (g.h <= 0) break;

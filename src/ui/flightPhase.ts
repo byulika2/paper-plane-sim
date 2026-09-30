@@ -11,6 +11,8 @@ export const PHASE_NAMES: Record<Phase, string> = {
   turn: '선회',
   glide: '활공',
 };
+/** One colour per part, the same on the height line, the room's trail and the badge. */
+export const PHASE_COLOURS: Record<Phase, string> = { climb: '#f59e0b', transition: '#ef4444', turn: '#a78bfa', glide: '#22c55e' };
 export const PHASE_TIPS: Record<Phase, string> = {
   climb: '손을 떠난 빠른 속도로 옆으로 누워 올라가요. 공기 저항이 커서 속도가 빨리 줄어요.',
   transition: '가장 느린 순간이에요. 코가 숙여지고 V자 날개 덕분에 수평으로 돌아와요.',
@@ -30,3 +32,16 @@ export function phaseAt(flight: Flight, p: FlightPoint): Phase {
   return Math.abs(p.bank ?? 0) > (15 * Math.PI) / 180 ? 'turn' : 'glide';
 }
 
+/** The recorded moment at or just before `t`. */
+export function pointAt(path: readonly FlightPoint[], t: number): FlightPoint {
+  let lo = 0;
+  let hi = path.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (path[mid]!.t <= t) lo = mid; else hi = mid - 1;
+  }
+  // The two ends a flight is closed with carry no air data: take the nearest moment that does.
+  for (let i = lo; i >= 0; i--) if (path[i]!.speed !== undefined) return path[i]!;
+  for (let i = lo; i < path.length; i++) if (path[i]!.speed !== undefined) return path[i]!;
+  return path[lo]!;
+}

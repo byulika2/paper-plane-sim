@@ -879,6 +879,9 @@ input.scrub:hover { border-color: color-mix(in srgb, var(--accent) 55%, transpar
 .tunnel-controls { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: end; }
 .tunnel-controls label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--dim); min-width: 220px; flex: 1 1 220px; }
 .tunnel-controls label b { color: var(--ink); font-size: 14px; }
+.flight-scene { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; }
+.flight-scene-stage { position: relative; height: 380px; background: var(--panel); border-radius: 8px; overflow: hidden; }
+.flight-scene-stage canvas { width: 100%; height: 100%; display: block; }
 .tunnel-phase { flex: 1 1 100%; display: flex; flex-direction: column; gap: 2px; padding: 8px 12px;
   border-left: 4px solid var(--accent); background: var(--panel); border-radius: 6px; }
 .tunnel-phase b { font-size: 16px; }

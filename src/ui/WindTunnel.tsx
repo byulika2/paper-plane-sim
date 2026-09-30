@@ -18,9 +18,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Tunnel3D } from './Tunnel3D.js';
 import type { Airframe } from '../aero/airframe.js';
 import { forcesAt } from '../aero/flight.js';
-import type { AeroModel, Flight, FlightPoint } from '../aero/flight.js';
+import type { AeroModel, Flight } from '../aero/flight.js';
 import type { RenderFace } from '../origami/space.js';
-import { PHASE_NAMES, PHASE_TIPS, phaseAt } from './flightPhase.js';
+import { PHASE_COLOURS, PHASE_NAMES, PHASE_TIPS, phaseAt, pointAt } from './flightPhase.js';
+import { FlightScene3D } from './FlightScene3D.js';
 import type { Phase } from './flightPhase.js';
 
 interface Props {
@@ -38,20 +39,6 @@ interface Props {
 const G = 9.81;
 const grams = (n: number) => (n / G) * 1000;
 const deg = (r: number) => (r * 180) / Math.PI;
-
-/** The recorded moment at or just before `t`. */
-function pointAt(path: readonly FlightPoint[], t: number): FlightPoint {
-  let lo = 0;
-  let hi = path.length - 1;
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >> 1;
-    if (path[mid]!.t <= t) lo = mid; else hi = mid - 1;
-  }
-  // The two ends a flight is closed with carry no air data: take the nearest moment that does.
-  for (let i = lo; i >= 0; i--) if (path[i]!.speed !== undefined) return path[i]!;
-  for (let i = lo; i < path.length; i++) if (path[i]!.speed !== undefined) return path[i]!;
-  return path[lo]!;
-}
 
 export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, flight }: Props) {
   const de = (elevatorDeg * Math.PI) / 180;
@@ -112,7 +99,7 @@ export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, flight }: Props
   const W = 320; const H = 150; const pad = 8;
   const sx = (time: number) => pad + (time / (total || 1)) * (W - 2 * pad);
   const sy = (h: number) => H - pad - (h / maxH) * (H - 2 * pad);
-  const colour: Record<Phase, string> = { climb: '#f59e0b', transition: '#ef4444', turn: '#a78bfa', glide: '#22c55e' };
+  const colour = PHASE_COLOURS;
   const segments: { phase: Phase; d: string }[] = [];
   for (let i = 1; i < pts.length; i++) {
     const ph = phaseAt(flight, pts[i]!);
@@ -150,6 +137,8 @@ export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, flight }: Props
           ))}
         </div>
       </div>
+
+      <FlightScene3D af={af} drawPlies={drawPlies} vee={vee} flight={flight} t={t} colours={PHASE_COLOURS} />
 
       <Tunnel3D af={af} drawPlies={drawPlies} alpha={alpha} bank={bank} gamma={gamma} airSpeed={speed}
         vee={vee} cl={f.cl} stalled={f.stalled}

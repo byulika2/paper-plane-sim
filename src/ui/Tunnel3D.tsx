@@ -21,7 +21,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { Airframe } from '../aero/airframe.js';
 import type { Vec3 } from '../geometry/math.js';
 import type { RenderFace } from '../origami/space.js';
-import { liftWings } from './flightReport.js';
+import { planeMeshes } from './planeMesh.js';
 
 interface Props {
   af: Airframe;
@@ -55,8 +55,6 @@ const VIEWS: ReadonlyArray<readonly [string, Vec3]> = [
   ['위에서', [0.001, 1, -0.02]],
 ];
 
-/** Body axes (x forward, y right, z down) to the scene's (x forward, y up, z right). */
-const scene3 = (q: Vec3): THREE.Vector3 => new THREE.Vector3(q[0], -q[2], q[1]);
 
 export function Tunnel3D(props: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -120,29 +118,7 @@ export function Tunnel3D(props: Props) {
       clear(plane);
       reach = Math.max(af.span, af.length, 0.08);
       // The wings lifted into their V about the keel, as on the flying screen.
-      const vee = liftWings(af, p.drawPlies, p.vee);
-      const pos: number[] = [];
-      const edges: number[] = [];
-      for (const f of p.drawPlies) {
-        const pts = f.points.map((q) => scene3(vee(af.frame.toBody(q))));
-        for (let i = 1; i + 1 < pts.length; i++) {
-          for (const k of [0, i, i + 1]) pos.push(pts[k]!.x, pts[k]!.y, pts[k]!.z);
-        }
-        for (let i = 0; i < pts.length; i++) {
-          const a = pts[i]!;
-          const b = pts[(i + 1) % pts.length]!;
-          edges.push(a.x, a.y, a.z, b.x, b.y, b.z);
-        }
-      }
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      geo.computeVertexNormals();
-      plane.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
-        color: 0xe8edf3, side: THREE.DoubleSide, roughness: 0.85, polygonOffset: true, polygonOffsetFactor: 1,
-      })));
-      const eg = new THREE.BufferGeometry();
-      eg.setAttribute('position', new THREE.Float32BufferAttribute(edges, 3));
-      plane.add(new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x7a8aa0, transparent: true, opacity: 0.55 })));
+      for (const o of planeMeshes(af, p.drawPlies, p.vee)) plane.add(o);
       pose();
     };
 
