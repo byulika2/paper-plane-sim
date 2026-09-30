@@ -15,7 +15,7 @@ import { ContextMenu } from './ContextMenu.js';
 import type { MenuItem } from './ContextMenu.js';
 import { alignFold } from '../geometry/constructions.js';
 import { senseMark } from './senses.js';
-import { bodyAndWings, cm, foldStats, isFold, keelLines, foldEdges, pickAt, rollLength, PRESETS, replay, snapPoints } from './foldSession.js';
+import { bodyAndWings, cm, foldStats, isFold, keelLines, foldEdges, pickAt, rollRetreat, PRESETS, replay, snapPoints } from './foldSession.js';
 import type { FoldStep, PatternLine, SnapPoint, Step } from './foldSession.js';
 
 /** What each kind of snap is called, for the line that says what it caught. */
@@ -32,7 +32,7 @@ import { useAnimatedPlies } from './useAnimatedPlies.js';
 import { renderFaces, turnedFromViewerAt } from '../origami/space.js';
 import { faceUnder } from '../origami/folding.js';
 import { collapsePattern } from '../origami/collapse.js';
-import { buildAirframe, lengthenNose, noseStretch } from '../aero/airframe.js';
+import { buildAirframe, noseStretch } from '../aero/airframe.js';
 import { measurePlane } from '../aero/spec.js';
 import { noseBulge } from '../aero/flight.js';
 import { bendElevator, defaultElevator } from './elevator.js';
@@ -826,6 +826,31 @@ export function App() {
     }
     return joined ? lit : null;
   }, [fold.preview, session.state, width]);
+  /*
+   * While the pupil says how a pocket squashes, the plies of the first fold
+   * are shown lifted on their line, as a hand lifts them to open the pocket:
+   * a see-through copy stood up at eighty degrees over the paper as it lies.
+   * The second fold - which line goes onto which - is found by looking at the
+   * pocket open, and in the paper lying flat it could only be imagined.
+   */
+  const pocketLift = useMemo(() => {
+    const fs = pocket && pocket.step.kind === 'fold' ? pocket.step : null;
+    if (!fs || fs.plies?.kind !== 'stack') return null;
+    const st = session.state;
+    const sides: Array<[Vec2, Vec2, Vec2]> = [[fs.a, fs.b, fs.movingSide]];
+    if (fs.symmetric) sides.push([[width - fs.a[0], fs.a[1]], [width - fs.b[0], fs.b[1]], [width - fs.movingSide[0], fs.movingSide[1]]]);
+    const faceSide = new Map<number, [Vec2, Vec2, Vec2]>();
+    for (const [a, b, m] of sides) {
+      const sideOf = (q: Vec2) => (b[0] - a[0]) * (q[1] - a[1]) - (b[1] - a[1]) * (q[0] - a[0]);
+      const toward = Math.sign(sideOf(m));
+      for (const f of pliesAtLine(st, a, b, m, fs.plies.count)) {
+        const o = faceOutline(st, f);
+        const c = o.reduce((acc, q) => [acc[0] + q[0] / o.length, acc[1] + q[1] / o.length], [0, 0] as Vec2);
+        if (Math.sign(sideOf(c)) === toward) faceSide.set(f, [a, b, m]);
+      }
+    }
+    return faceSide.size ? faceSide : null;
+  }, [pocket, session.state, width]);
   const animated = useAnimatedPlies(
     width, height, steps, pocketLit ? null : fold.preview, useThickness ? paper.foldedPitch : 0, session.state);
   const { animating } = animated;
@@ -833,7 +858,36 @@ export function App() {
   const plies = useMemo(() => (pocketLit
     ? animated.plies.map((f) => (pocketLit.has(f.face) ? { ...f, movedBy: steps.length } : f))
     : animated.plies), [animated.plies, pocketLit, steps.length]);
-  const previewIndex = pocketLit ? steps.length : animated.previewIndex;
+  // Drawn only, over the model: nothing weighs them, stands the plane up by them or folds them.
+  const pocketGhosts = useMemo(() => {
+    if (!pocketLift) return null;
+    // Turned about their fold line, toward the viewer (-z), by eighty degrees.
+    const LIFT = (80 * Math.PI) / 180;
+    const turnAbout = (a: Vec2, b: Vec2, t: number) => {
+      const ux = b[0] - a[0]; const uy = b[1] - a[1]; const ul = Math.hypot(ux, uy) || 1;
+      const k: [number, number, number] = [ux / ul, uy / ul, 0];
+      const c = Math.cos(t); const sn = Math.sin(t);
+      return (p: readonly [number, number, number]): [number, number, number] => {
+        const v: [number, number, number] = [p[0] - a[0], p[1] - a[1], p[2]];
+        const kv = k[0] * v[0] + k[1] * v[1];
+        const x: [number, number, number] = [k[1] * v[2], -k[0] * v[2], k[0] * v[1] - k[1] * v[0]];
+        return [a[0] + v[0] * c + x[0] * sn + k[0] * kv * (1 - c), a[1] + v[1] * c + x[1] * sn + k[1] * kv * (1 - c), v[2] * c + x[2] * sn];
+      };
+    };
+    return animated.plies.filter((f) => pocketLift.has(f.face)).map((f) => {
+      const [a, b, m] = pocketLift.get(f.face)!;
+      // Whichever way round takes the moving side up toward the viewer.
+      const plus = turnAbout(a, b, LIFT)([m[0], m[1], 0]);
+      const turn = turnAbout(a, b, plus[2] < 0 ? LIFT : -LIFT);
+      const o = turn([0, 0, 0]);
+      const n = turn(f.normal as [number, number, number]);
+      return {
+        ...f, points: f.points.map((q) => turn(q as [number, number, number])),
+        normal: [n[0] - o[0], n[1] - o[1], n[2] - o[2]] as [number, number, number], movedBy: steps.length,
+      };
+    });
+  }, [animated.plies, pocketLift, steps.length]);
+  const previewIndex = pocketLit || pocketLift ? steps.length : animated.previewIndex;
 
   // The aeroplane's own axes, so the 3D view can stand it up the way it flies.
   const airframe = useMemo(
@@ -856,10 +910,9 @@ export function App() {
   // Measured once, as the list's card measures it: the flight is worked out on the measurements.
   const { restPlies, restSpec } = useMemo(() => {
     const drawn = renderFaces(session.state, -1, paper.foldedPitch);
-    const roll = rollLength(steps, session, paper.foldedPitch, drawn, paper);
-    const plies = lengthenNose(drawn, paper, roll.extra, roll.band);
-    const spec = measurePlane(plies, paper, paper.foldedPitch, foldEdges(steps, session, paper.foldedPitch, drawn, paper));
-    return { restPlies: plies, restSpec: spec };
+    const roll = rollRetreat(steps, session, paper.foldedPitch, drawn, paper);
+    const spec = measurePlane(drawn, paper, paper.foldedPitch, foldEdges(steps, session, paper.foldedPitch, drawn, paper), roll.retreat);
+    return { restPlies: drawn, restSpec: spec };
   }, [steps, session, paper]);
   const restAirframe = restSpec?.af ?? null;
 
@@ -1104,14 +1157,14 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [plies, airframe, bentIn?.fromCm, bentIn?.widthCm, bentIn?.depthCm, bentIn?.angleDeg]);
   /*
-   * Shown as real paper folds it: the nose as much longer than the drawing as
+   * Shown as real paper folds it: the nose as much shorter than the drawing as
    * the flight counts it (see `noseStretch`). Only how it looks - the lines
    * are folded on and measured on the drawing, where a 1.9cm roll is 1.9cm.
    */
-  const rollNow = useMemo(() => rollLength(steps, session, paper.foldedPitch, plies, paper),
+  const rollNow = useMemo(() => rollRetreat(steps, session, paper.foldedPitch, plies, paper),
     [steps, session, paper, plies]);
   const reshape = useMemo(
-    () => (useThickness ? noseStretch(plies, paper, rollNow.extra, rollNow.band) : null),
+    () => (useThickness ? noseStretch(plies, paper, rollNow.retreat, rollNow.band) : null),
     [useThickness, plies, paper, rollNow],
   );
   // What the flying screen flies: the measured plane, or the one on the stage when there is no record behind it.
@@ -2620,7 +2673,7 @@ export function App() {
           )}
           <Stage3D
             model={session.model}
-            plies={importedPlies ?? shownPlies}
+            plies={importedPlies ?? (pocketGhosts ? [...shownPlies, ...pocketGhosts] : shownPlies)}
             reshape={importedPlies ? null : reshape}
             paper={paper}
             mode={mode}

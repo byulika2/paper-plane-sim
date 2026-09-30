@@ -331,47 +331,45 @@ export interface Carried { readonly share: number; readonly plies: number; reado
 /*
  * How much of a bundle's wrap the paper pays for: all of it, half a turn
  * round the bundle's average depth at the paper's own caliper. With nothing
- * fitted, that makes the pupil's square plane Unis 11.04 cm long folded, where
- * paper of no thickness makes 10.1 and the real one measures 11.1.
+ * fitted it gives both measurements there are: Birdman's nose 5.8 mm back and
+ * its balance point 2.50 cm from it, where the guide says 2.5; and the pupil's
+ * Unis 11.0 cm long, where the drawing makes it 11.8 and the real one 11.1.
  */
 const WRAP = 1;
 /* A roll's crease lies in the front of the finished aeroplane, across it. */
 const NOSE_SHARE = 0.4;
 
 /**
- * How much longer real paper's rolls leave the nose than the drawing's, and
- * the depth of the bundle behind the nose, metres.
+ * How far a real nose sits back from the drawn one, and the depth of the
+ * bundle behind it, metres.
  *
  * The drawing folds paper of no thickness. Real paper rolled over a bundle n
- * plies deep has to go half a turn round it, and a roll is judged by its
- * bundle - rolled over by the bundle's own width - so the paper the turn takes
- * is paper the roll does not take in: every roll leaves the sheet a little
- * longer than the drawing, and the rolled nose comes out further forward. (It
- * was once counted the other way, the nose coming back by every roll's depth,
- * and a square plane's balance point came out ahead of its nose.)
+ * plies deep has to go half a turn round it - pi/2 of n calipers - so each
+ * roll lands that much short of its line, and a nose rolled six times comes
+ * out shorter. The paper is still there: the wraps it went into are at the
+ * nose, so the weight stays where it was and the balance point is that much
+ * nearer the nose (the guide: Birdman balances 2.5 cm from its nose, where
+ * the drawing says 3.1).
  *
  * A roll is told by where it ends up, on the finished aeroplane `plies`: a
  * fold closed flat whose crease runs across the aeroplane in the front of it.
- * Told by the line's direction on the drawing, as it was, a tail flap, the
- * two folds of a pleat and a fold of one ply were rolls too, a sheet turned
- * sideways had none, and the bundle's depth was whichever fold came last.
  */
-export function rollLength(
+export function rollRetreat(
   steps: readonly Step[],
   session: Pick<SessionState, 'carried' | 'stepCreases'>,
   pitch: number,
   plies: readonly RenderFace[],
   paper: PaperProps,
-): { extra: number; band: number } {
-  let extra = 0;
+): { retreat: number; band: number } {
+  let retreat = 0;
   let band = 0;
   let front = -Infinity;
   for (const e of foldEdges(steps, session, pitch, plies, paper)) {
     if (!e.roll) continue;
-    extra += WRAP * (Math.PI / 2) * pitch * e.plies;
+    retreat += WRAP * (Math.PI / 2) * pitch * e.plies;
     if (e.x > front) { front = e.x; band = e.depth; }
   }
-  return { extra, band };
+  return { retreat, band };
 }
 
 /**

@@ -23,8 +23,8 @@ import { collapsePattern } from '../src/origami/collapse.js';
 import type { Step } from '../src/ui/foldSession.js';
 import { SAMPLES } from './samples.js';
 import { readFileSync } from 'node:fs';
-import { lengthenNose, noseStretch } from '../src/aero/airframe.js';
-import { foldEdges, rollLength } from '../src/ui/foldSession.js';
+import { noseStretch } from '../src/aero/airframe.js';
+import { foldEdges, rollRetreat } from '../src/ui/foldSession.js';
 import { CELL, measurePlane } from '../src/aero/spec.js';
 import { throwsAround } from '../src/ui/flightStats.js';
 import { airborneVee, flightBase, flightReport, DEFAULT_FLIGHT } from '../src/ui/flightReport.js';
@@ -2599,24 +2599,24 @@ for (const plane of SAMPLES.filter((z) => z.id === 'jet' || z.id === 'triangle' 
     const paper = paperProps(SHEET_SIZES.find((z) => z.widthMm === r.widthMm && z.heightMm === r.heightMm) ?? SHEET_SIZES[0]!, r.gsm);
     const sess = replay(r.widthMm / 1000, r.heightMm / 1000, r.steps, paper.foldedPitch);
     const drawn = renderFacesHeld(sess.state, -1, paper.foldedPitch);
-    const roll = rollLength(r.steps, sess, paper.foldedPitch, drawn, paper);
-    const plies = lengthenNose(drawn, paper, roll.extra, roll.band);
-    const spec = measurePlane(plies, paper, paper.foldedPitch, foldEdges(r.steps, sess, paper.foldedPitch, drawn, paper))!;
+    const roll = rollRetreat(r.steps, sess, paper.foldedPitch, drawn, paper);
+    const plies = drawn;
+    const spec = measurePlane(plies, paper, paper.foldedPitch, foldEdges(r.steps, sess, paper.foldedPitch, drawn, paper), roll.retreat)!;
     return { r, paper, sess, drawn, roll, plies, spec, af0: buildAirframe(drawn, paper), af: buildAirframe(plies, paper) };
   };
 
-  // Highest rolls its nose over and over: longer for it, by about what a
-  // half turn round each bundle takes - some millimetres, not centimetres.
+  // Highest rolls its nose over and over: shorter for it, by what a half turn
+  // round each bundle takes - some millimetres, not centimetres.
   const hi = built('highest');
-  const grew = hi.af.length - hi.af0.length;
-  check('rolled paper leaves the nose longer, by millimetres',
-    grew > 0.003 && grew < 0.015 && Math.abs(grew - hi.roll.extra) < 0.002,
-    `${(hi.af0.length * 100).toFixed(2)} -> ${(hi.af.length * 100).toFixed(2)}cm, rolls ${(hi.roll.extra * 1000).toFixed(1)}mm`);
+  const shrank = hi.af0.length - hi.spec.af.length;
+  check('rolled paper leaves the nose shorter, by millimetres',
+    shrank > 0.003 && shrank < 0.015 && Math.abs(shrank - hi.roll.retreat) < 0.002,
+    `${(hi.af0.length * 100).toFixed(2)} -> ${(hi.spec.af.length * 100).toFixed(2)}cm, rolls ${(hi.roll.retreat * 1000).toFixed(1)}mm`);
 
   // The dart's folds are along its length and its flaps behind the nose: no rolls.
   const jet = built('jet');
-  check('a dart has no nose rolls to lengthen', jet.roll.extra < 0.002,
-    `${(jet.roll.extra * 1000).toFixed(1)}mm`);
+  check('a dart has no nose rolls to speak of', jet.roll.retreat < 0.002,
+    `${(jet.roll.retreat * 1000).toFixed(1)}mm`);
 
   // The stretch leaves the tail where it is and moves the nose by all of it.
   const move = noseStretch(hi.drawn, hi.paper, 0.01, hi.roll.band);
@@ -2629,7 +2629,7 @@ for (const plane of SAMPLES.filter((z) => z.id === 'jet' || z.id === 'triangle' 
     if (x < hi.af0.cgFromNose - hi.af0.length + 1e-6) tailMoved = Math.max(tailMoved, d);
     if (x > hi.af0.cgFromNose - 1e-4) noseMoved = Math.max(noseMoved, d);
   }
-  check('stretching the nose moves the nose, not the tail',
+  check('drawing the nose shorter moves the nose, not the tail',
     !!move && tailMoved < 1e-6 && Math.abs(noseMoved - 0.01) < 1e-6,
     `tail ${(tailMoved * 1000).toFixed(3)}mm, nose ${(noseMoved * 1000).toFixed(3)}mm`);
 
@@ -2709,8 +2709,8 @@ for (const plane of SAMPLES.filter((z) => z.id === 'jet' || z.id === 'triangle' 
       const pitch = paper.foldedPitch * scale;
       const sess = replay(r.widthMm / 1000, r.heightMm / 1000, r.steps, pitch);
       const drawn = renderFacesHeld(sess.state, -1, pitch);
-      const roll = rollLength(r.steps, sess, pitch, drawn, paper);
-      const sp = measurePlane(lengthenNose(drawn, paper, roll.extra, roll.band), paper, pitch)!;
+      const roll = rollRetreat(r.steps, sess, pitch, drawn, paper);
+      const sp = measurePlane(drawn, paper, pitch, [], roll.retreat)!;
       const rep = flightReport(flightBase(sp), sp, paper, { ...DEFAULT_FLIGHT, vee: r.vee ?? null, elevator: 5 });
       const runs = throwsAround(rep.launch, 30).map((l) => fly(rep.af, rep.m, l, 0.004));
       return runs.reduce((a, x) => a + x.time, 0) / runs.length;

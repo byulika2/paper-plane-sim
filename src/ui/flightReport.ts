@@ -200,7 +200,7 @@ export function flightReport(
   const airframe = spec.af;
   const flatWing = Math.abs(Math.round((airframe.dihedral * 180) / Math.PI)) < 3;
   const vee = flyingVee(airframe, s.vee);
-  // The plies are real paper's already (see `lengthenNose`): the balance point is theirs.
+  // Measured off real paper (see `measurePlane`): the nose where its rolls leave it, the weight where the paper is.
   const computedCg = Math.round(airframe.cgFromNose * 1000) / 10;
 
   /*

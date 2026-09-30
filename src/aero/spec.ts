@@ -180,6 +180,8 @@ function heightAt(pts: readonly Vec3[], x: number, y: number): number {
  */
 export function measurePlane(
   plies: readonly RenderFace[], paper: PaperProps, caliper: number, folds: readonly FoldEdge[] = [],
+  /** How far the real nose sits back from the drawn one (see `rollRetreat`). */
+  retreat = 0,
 ): PlaneSpec | null {
   if (plies.length < 2) return null;
   const drawn = buildAirframe(plies, paper);
@@ -368,8 +370,11 @@ export function measurePlane(
   /*
    * The equivalent aeroplane: its planform and V off the map, its weight
    * and inertia off the paper. Twenty-four stations, as the lattice has
-   * always been given; every cell of the map goes into its area.
+   * always been given; every cell of the map goes into its area. The real
+   * nose sits `retreat` back from the drawn one: the leading edge comes back
+   * with it, the weight stays where the paper is.
    */
+  const nose = maxX - Math.max(0, retreat);
   const STATIONS = 24;
   const stations: Station[] = [];
   let area = 0;
@@ -387,12 +392,13 @@ export function measurePlane(
       lead = Math.max(lead, x + CELL / 2); trail = Math.min(trail, x - CELL / 2);
       zw += (top[k]! + bottom[k]!) / 2; w += 1;
     }
+    lead = Math.min(lead, nose);
     if (!(lead > trail)) continue;
     stations.push({ y, leading: lead, trailing: trail, chord: lead - trail, z: w > 0 ? zw / w : 0 });
   }
   for (let r = 0; r < ny; r++) {
     let n = 0;
-    for (let c = 0; c < nx; c++) if (count[r * nx + c]! > 0) n++;
+    for (let c = 0; c < nx; c++) if (count[r * nx + c]! > 0 && x0 + c * CELL <= nose) n++;
     area += n * CELL * CELL;
     macNum += (n * CELL) ** 2 * CELL;
   }
@@ -413,7 +419,7 @@ export function measurePlane(
   const af: Airframe = {
     mass: drawn.mass,
     frame: drawn.frame,
-    cgFromNose: maxX,
+    cgFromNose: nose,
     stations,
     wingArea: area,
     span,
@@ -421,7 +427,7 @@ export function measurePlane(
     aspectRatio: area > 1e-9 ? (span * span) / area : 0,
     dihedral: slopeDen > 1e-12 ? Math.atan(slopeNum / slopeDen) : 0,
     finArea,
-    length: maxX - minX,
+    length: nose - minX,
     wettedArea: drawn.wettedArea,
   };
 

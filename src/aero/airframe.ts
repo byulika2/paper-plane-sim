@@ -337,21 +337,18 @@ export function buildAirframe(
 }
 
 /**
- * Real paper's rolls, as a change to points: the rolled nose `extra` further
- * forward than the drawing puts it, and the wing between its trailing edge and
- * the back of the last roll's bundle - `band` behind the nose - stretched
- * evenly to meet it. Evenly, so every flat ply stays flat and a line drawn on
- * the paper stays straight; the bundle and all ahead of it just move forward.
- * Null when there is nothing to move.
- *
- * One change for everything drawn and flown - the plies, the lines on them,
- * the points the pointer can catch - so the folding screen shows the
- * aeroplane the flight is worked out for.
+ * Real paper's rolls, as a change to points, for showing: the nose `retreat`
+ * further back than the drawing puts it, and the wing between its trailing
+ * edge and the back of the last roll's bundle - `band` behind the nose -
+ * drawn that much shorter, evenly, so every flat ply stays flat and a line on
+ * the paper stays straight. Null when there is nothing to move. (The flight
+ * takes the same retreat off the measured plane, weight left where it is:
+ * see `measurePlane`.)
  */
 export function noseStretch(
-  plies: readonly RenderFace[], paper: PaperProps, extra: number, band: number,
+  plies: readonly RenderFace[], paper: PaperProps, retreat: number, band: number,
 ): ((p: Vec3) => Vec3) | null {
-  if (!(extra > 1e-6) || plies.length < 2) return null;
+  if (!(Math.abs(retreat) > 1e-6) || plies.length < 2) return null;
   const af = buildAirframe(plies, paper, 8);
   if (!(af.length > 0)) return null;
   const o = af.frame.toBody([0, 0, 0]);
@@ -364,15 +361,6 @@ export function noseStretch(
   return (p) => {
     const x = af.frame.toBody(p)[0];
     const k = x >= from ? 1 : x <= tail ? 0 : (x - tail) / (from - tail);
-    return [p[0] + forward[0] * extra * k, p[1] + forward[1] * extra * k, p[2] + forward[2] * extra * k];
+    return [p[0] - forward[0] * retreat * k, p[1] - forward[1] * retreat * k, p[2] - forward[2] * retreat * k];
   };
-}
-
-/**
- * The folded plies as real paper leaves them (see `noseStretch`). Each ply
- * keeps its paper: its weight is the sheet's, wherever it lies.
- */
-export function lengthenNose(plies: readonly RenderFace[], paper: PaperProps, extra: number, band: number): readonly RenderFace[] {
-  const move = noseStretch(plies, paper, extra, band);
-  return move ? plies.map((f) => ({ ...f, points: f.points.map(move) })) : plies;
 }
