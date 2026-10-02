@@ -156,6 +156,8 @@ export function WindTunnel({ af, m, drawPlies, elevatorDeg, vee, launch }: Props
           <dt>날개 각도 (받음각)</dt><dd>{deg(alpha).toFixed(1)}°</dd>
           <dt>{gamma >= 0 ? '올라가는 각도' : '내려가는 각도'}</dt><dd>{Math.abs(deg(gamma)).toFixed(0)}°{Math.abs(deg(gamma)) > 90 ? ' (뒤집혀 돌아요 · 루프)' : ''}</dd>
           <dt>옆으로 기운 각도</dt><dd>{Math.abs(deg(bank)).toFixed(0)}°{Math.abs(deg(bank)) > 60 ? ' (옆으로 누워 있어요)' : ''}</dd>
+          {/* Banked and turning, the circle it flies: 2 V^2 / (g tan bank). */}
+          <dt>도는 원 지름</dt><dd>{Math.abs(bank) > 0.03 && Math.abs(bank) < 1.4 && speed > 0.5 ? `${((2 * speed * speed) / (G * Math.tan(Math.abs(bank)))).toFixed(0)}m · ${bank > 0 ? '왼쪽' : '오른쪽'}으로` : '곧게 날아요'}</dd>
           <dt>양력</dt><dd>{grams(lift).toFixed(1)}g · 비행기 무게의 {(lift / weight).toFixed(1)}배</dd>
           <dt>항력 (공기 저항)</dt><dd>{grams(drag).toFixed(2)}g</dd>
           <dt>머리 움직임</dt><dd>{pitchWord}</dd>

@@ -19,6 +19,7 @@ import { ELEVATOR, ELEVATOR_STEPS, bendElevator, elevatorRiseMm } from './elevat
 import type { ElevatorTune } from './elevator.js';
 import { KIND_TEXT, balanceGrade, canFly, flightBase, flightReport } from './flightReport.js';
 import type { FlightSettings } from './flightReport.js';
+import { RUDDER } from '../aero/flight.js';
 import {
   KIND_NAMES, cachedStats, keepStats, runThrows, statsKey, summarize, throwsAround,
 } from './flightStats.js';
@@ -50,6 +51,8 @@ interface Props {
   recommendedAngle?: number | null;
   /** The plane's name, at the head of its results. */
   planeName?: string;
+  /** The tuning it flies longest with (see bestTuning): what 추천 튜닝 sets. */
+  bestTune?: { angle: number; elevator: number; vee: number } | null;
 }
 
 /*
@@ -91,11 +94,16 @@ function releaseHeight(speed: number): number {
   return Math.round(who.stature * OVERHAND * 100) / 100;
 }
 
-/** How it leaves the hand: wings level (the list's throw), or on its side. */
-const BANKS = [
-  { label: '날개 수평', bank: 0 },
-  { label: '옆으로 기울여', bank: 90 },
-] as const;
+/*
+ * The winglets' back edges, bent sideways by so many millimetres over their
+ * last centimetre (RUDDER): left negative, right positive.
+ */
+const RUDDER_STEPS = [-2, -1, -0.5, 0, 0.5, 1, 2] as const;
+const rudderDeg = (mm: number) => (Math.atan(mm / (RUDDER * 1000)) * 180) / Math.PI;
+const rudderWord = (deg: number) => {
+  const mm = Math.tan((deg * Math.PI) / 180) * RUDDER * 1000;
+  return Math.abs(mm) < 0.05 ? '곧게' : `뒤끝 ${Math.abs(mm).toFixed(1)}mm ${mm > 0 ? '오른쪽' : '왼쪽'}`;
+};
 
 const turnWord = (deg: number) => (deg > 0 ? `올림 ${deg}°` : deg < 0 ? `내림 ${-deg}°` : '평평');
 
@@ -150,7 +158,7 @@ export function FlightPanel(props: Props) {
 function FlightField({
   spec, plies, paper, settings, onSettings, shownPlies, elevatorTune, recommended,
   onElevatorTune, onRecompute,
-  recommendedAngle, planeName,
+  recommendedAngle, planeName, bestTune,
 }: Props) {
   const r = settings.region;
   const airframe = spec.af;
@@ -158,15 +166,12 @@ function FlightField({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [spec, r?.y0, r?.y1, r?.depth]);
   /*
-   * The numbers are the plane's own, untuned: flown with its elevator flat,
-   * so a plane that lifts hard loops and loses its height, as it does when
-   * thrown straight off the bench. The elevator is a try for the simulator.
+   * The numbers are the throw as it is set: the screen opens at the plane's
+   * best tuning (bestTuning), so they are the card's until the pupil changes
+   * something and applies it.
    */
-  const untuned = useMemo(() => ({ ...settings, elevator: 0 }), [settings]);
   const report = useMemo(
-    () => flightReport(base, spec, paper, untuned), [base, spec, paper, untuned]);
-  const simReport = useMemo(
-    () => (settings.elevator === 0 ? report : flightReport(base, spec, paper, settings)), [base, spec, paper, settings, report]);
+    () => flightReport(base, spec, paper, settings), [base, spec, paper, settings]);
   const {
     speed, angle, cgInput, elevator, clips,
   } = settings;
@@ -184,8 +189,8 @@ function FlightField({
    */
   const applied = useMemo(() => ({
     speed, angle, gust: settings.gust ?? 1, headwind: settings.headwind, elevator,
-    vee: Math.round(vee), bank: settings.bank,
-  }), [speed, angle, settings.gust, settings.headwind, elevator, vee, settings.bank]);
+    vee: Math.round(vee), rudder: settings.rudder ?? 0,
+  }), [speed, angle, settings.gust, settings.headwind, elevator, vee, settings.rudder]);
   const [draft, setDraft] = useState(applied);
   const appliedKey = JSON.stringify(applied);
   // Follows what is applied - the screen settling a value as it opens, or an apply - but never over an edit not yet applied.
@@ -202,14 +207,23 @@ function FlightField({
   const draftPlies = useMemo(() => bendElevator(plies, spec.af, draftTune),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [plies, spec.af, draft.elevator]);
-  const applyDraft = () => {
+  // The recommended tuning, as the draft would hold it; and whether it is what is flying now.
+  const tuned: { elevator: number; angle?: number; vee?: number } | null = bestTune
+    ? { elevator: bestTune.elevator, angle: bestTune.angle, vee: bestTune.vee }
+    : recommended ? { elevator: recommended.angleDeg, ...(recommendedAngle ? { angle: recommendedAngle } : {}) } : null;
+  const tunedNow = !!tuned && !dirty && draft.elevator === tuned.elevator && (tuned.angle === undefined || draft.angle === tuned.angle)
+    && (tuned.vee === undefined || draft.vee === tuned.vee) && draft.rudder === 0;
+  const applyDraft = (patch: Partial<typeof draft> = {}) => {
+    const next = { ...draft, ...patch };
+    if (Object.keys(patch).length) setDraft(next);
     if (elevatorTune && (elevatorTune.fromCm !== ELEVATOR.fromCm || elevatorTune.widthCm !== ELEVATOR.widthCm || elevatorTune.depthCm !== ELEVATOR.depthCm)) {
       onElevatorTune?.({ ...ELEVATOR });
     }
     onSettings({
-      ...settings, speed: draft.speed, height: releaseHeight(draft.speed), angle: draft.angle,
-      headwind: draft.headwind, crosswind: 0, updraft: 0, gust: draft.gust, elevator: draft.elevator, vee: draft.vee,
-      bank: draft.bank,
+      ...settings, speed: next.speed, height: releaseHeight(next.speed), angle: next.angle,
+      headwind: next.headwind, crosswind: 0, updraft: 0, gust: next.gust, elevator: next.elevator, vee: next.vee,
+      // Always thrown with the wings level.
+      bank: 0, rudder: next.rudder,
     });
   };
   /*
@@ -324,18 +338,6 @@ function FlightField({
           </h3>
           <Slider value={draft.angle} min={30} max={90} step={10} marks={['30°', '60°', '90°']} onChange={(v) => edit({ angle: v })} />
 
-          {/*
-            * Wings level, the lift bends the climb over the aeroplane's back
-            * into a loop; on its side, as long-flight throwers hold it, the
-            * lift bends it sideways and the V brings it level at the top.
-            */}
-          <h3>던지는 모양</h3>
-          <div className="flight-choices">
-            {BANKS.map((b) => (
-              <button key={b.bank} className={draft.bank === b.bank ? 'on' : ''} onClick={() => edit({ bank: b.bank })}>{b.label}</button>
-            ))}
-          </div>
-
           <h3>장소</h3>
           <div className="flight-choices">
             {PLACES.map((w) => (
@@ -362,6 +364,23 @@ function FlightField({
           </div>
           <div className="flight-marks"><span>− 내림</span><span>평평</span><span>올림 +</span></div>
 
+          {/*
+            * How the guide sets a plane circling: both winglets' back edges
+            * bent the same way, a little - it turns the way they are bent.
+            */}
+          <h3>윙렛 꺾기 <span className="flight-value">{rudderWord(draft.rudder)}</span></h3>
+          <div className="flight-steps">
+            {RUDDER_STEPS.map((mm) => {
+              const deg = rudderDeg(mm);
+              return (
+                <button key={mm} className={Math.abs(draft.rudder - deg) < 1e-6 ? 'on' : ''} onClick={() => edit({ rudder: deg })}>
+                  {mm === 0 ? '0' : mm > 0 ? `+${mm}` : `−${-mm}`}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flight-marks"><span>− 왼쪽으로 (mm)</span><span>곧게</span><span>오른쪽으로 +</span></div>
+
           <h3>날개 각도 <span className="flight-value">수평에서 {Math.abs(draft.vee)}° {draft.vee >= 0 ? '위' : '아래'}</span>
             {Math.round(measuredVee) !== draft.vee && (
               <button className="link" onClick={() => edit({ vee: Math.round(measuredVee) })}>접은 그대로 {Math.round(measuredVee)}°</button>
@@ -371,15 +390,25 @@ function FlightField({
             caption={`수평에서 ${Math.abs(draft.vee)}° ${draft.vee >= 0 ? '위' : '아래'}`} />
           <Slider value={draft.vee} min={-10} max={30} step={1} marks={['아래 10°', '위 10°', '위 30°']} onChange={(v) => edit({ vee: v })} />
 
-          <button className="primary flight-apply-all" disabled={!dirty} onClick={applyDraft}>
+          {/*
+            * The tuning worked out for this throw - the elevator that keeps it
+            * up longest, and the angle that goes with it - set and flown in one go.
+            */}
+          {tuned && (
+            <button className="flight-apply-tuning" disabled={tunedNow} onClick={() => applyDraft({ ...tuned, rudder: 0 })}>
+              {tunedNow ? '추천 튜닝 적용됨' : '추천 튜닝 적용하기'}
+              <small>엘리베이터 {turnWord(tuned.elevator)}{tuned.angle !== undefined ? ` · 던지는 각도 ${tuned.angle}°` : ''}{tuned.vee !== undefined ? ` · 날개 ${tuned.vee}°` : ''}</small>
+            </button>
+          )}
+          <button className="primary flight-apply-all" disabled={!dirty} onClick={() => applyDraft()}>
             {dirty ? '적용하기' : '적용됨'}
           </button>
         </section>}
 
         {view === 'tunnel' ? (
           <section className="flight-results flight-tunnel-view">
-            <WindTunnel af={simReport.af} m={simReport.m} drawPlies={shownPlies ?? plies}
-              elevatorDeg={elevator} vee={vee} launch={simReport.launch} />
+            <WindTunnel af={report.af} m={report.m} drawPlies={shownPlies ?? plies}
+              elevatorDeg={elevator} vee={vee} launch={report.launch} />
           </section>
         ) : (
         <section className="flight-results">

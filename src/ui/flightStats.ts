@@ -19,8 +19,8 @@ import type { PaperProps } from '../paper/stock.js';
 import type { Grade } from './flightReport.js';
 
 /*
- * The throw is the pupil's, exactly as set: what differs from one to the next
- * is the air it meets. One standard deviation each, indoors - still room air
+ * The throw is the pupil's, as set: what differs from one to the next is the
+ * air it meets, and the hand's own small wobble (below). One standard deviation each, indoors - still room air
  * moves at less than 0.2 m/s (the comfort limit rooms are ventilated to) -
  * and `gust` times that outdoors, where a 2 m/s breeze gusts by a fifth.
  *
@@ -30,7 +30,14 @@ import type { Grade } from './flightReport.js';
  * length. Held steady over the flight it stays small - 0.2 m/s held steady is
  * a thermal, and doubles the flight of a glider sinking at 0.7.
  */
-const SPREAD = { gust: 0.15, side: 0.12, rise: 0.05 };
+/*
+ * And the hand: thrown with the wings level, but no hand lets go exactly
+ * level - a degree or two either way, one standard deviation of 2° here (an
+ * estimate, not a measurement). It matters: a throw exactly level that goes
+ * over the top comes back down the same way it went up, where any tilt at
+ * all lets it roll out at the top as a real one does.
+ */
+const SPREAD = { gust: 0.15, side: 0.12, rise: 0.05, bank: 2 };
 const SEED = 20260926;
 
 /** A small, fast, seedable generator (mulberry32). */
@@ -60,6 +67,7 @@ export function throwsAround(launch: Launch, n: number, seed = SEED): Launch[] {
       headwind: launch.headwind + (launch.gust ?? 1) * SPREAD.gust * normal(),
       crosswind: launch.crosswind + (launch.gust ?? 1) * SPREAD.side * normal(),
       updraft: (launch.updraft ?? 0) + (launch.gust ?? 1) * SPREAD.rise * normal(),
+      bankDeg: (launch.bankDeg ?? 0) + SPREAD.bank * normal(),
     });
   }
   return out;

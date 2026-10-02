@@ -22,7 +22,7 @@ import { buildSystem, freestream, RHO, solve } from './vlm.js';
 import type { LatticePanel } from './vlm.js';
 import type { PaperProps } from '../paper/stock.js';
 import { CELL } from './spec.js';
-import type { PlaneSpec } from './spec.js';
+import type { Fin, PlaneSpec } from './spec.js';
 import { unit } from '../geometry/math.js';
 import type { Vec3 } from '../geometry/math.js';
 
@@ -41,9 +41,6 @@ const NU = 1.5e-5;
 const CD_FORM = 0.006;
 /** A flat plate's normal-force coefficient broadside to the air (square plate, Hoerner: 1.17). */
 const PLATE_NORMAL = 1.2;
-/** Roll-out rate per radian of dihedral, 1/s, and the speed it fades above, m/s. */
-const ROLL_LEVEL = 6;
-const ROLL_SPEED = 4;
 
 export interface Launch {
   /** Throw speed, m/s. */
@@ -64,6 +61,8 @@ export interface Launch {
   readonly gust?: number;
   /** Wings tilted at the throw, degrees: 90 is held on its side, overhand. */
   readonly bankDeg?: number;
+  /** Winglets' last centimetre (RUDDER) bent to the right, degrees (the left is negative): it turns that way. */
+  readonly rudderDeg?: number;
 }
 
 export interface AeroModel {
@@ -101,6 +100,22 @@ export interface AeroModel {
    * large on a wing hardly longer than it is wide, nothing on a long one.
    */
   readonly kv?: number;
+  /** The upright surfaces - keel and winglets - for sideslip, yaw and roll (see `sideSurfaces`). */
+  readonly side?: readonly SideSurface[];
+}
+
+/**
+ * An upright surface the air can push sideways on: the keel, or a winglet.
+ * Where its middle is (m from the nose, and m below the wing's plane - up is
+ * negative), its side area, and how tall it stands, for its lift slope.
+ */
+export interface SideSurface {
+  readonly area: number;
+  readonly fromNose: number;
+  readonly below: number;
+  readonly height: number;
+  /** A winglet, whose back half is what is bent to turn. */
+  readonly winglet: boolean;
 }
 
 /** Flap depth: a bend at the trailing edge is about a centimetre deep. */
@@ -307,9 +322,35 @@ function vortexLift(m: AeroModel, alpha: number): number {
   return k * sn * Math.abs(sn) * Math.cos(alpha);
 }
 
-function pitchCoefficient(m: AeroModel, alpha: number, elevator: number, s: number, cl: number, cd: number): number {
+/*
+ * Slow air pitches the nose up.
+ *
+ * At the speeds a paper aeroplane glides - a Reynolds number of a few tens of
+ * thousands on a 10 cm chord - the boundary layer over the back of a wing is
+ * thick and laminar and leaves the paper before the trailing edge, and the
+ * lift the back of the wing should carry is lost: the push moves forward and
+ * the nose comes up (Mueller and co-workers' low-Reynolds-number plate and
+ * aerofoil tests show the pitching moment rising as the Reynolds number
+ * falls). Thrown hard, at a hundred and fifty thousand, the flow holds to the
+ * back of the wing and the effect is gone. So the same aeroplane trims at a
+ * low angle in the fast climb and at a high one in the slow glide - which is
+ * how a paper aeroplane climbs in a gentle curve and, slowed at the top,
+ * settles nose-down into a glide.
+ *
+ * Its size and the speed it fades at are not measured on paper aeroplanes;
+ * they are set by the guide's Birdman (2026-10-03): tuned with the elevator
+ * down, it climbs some 20 m and stays up 15 to 30 seconds. One figure for
+ * every aeroplane.
+ */
+const SLOW_CM = 0.015;
+const SLOW_RE = 70000;
+function slowAir(re: number): number {
+  return SLOW_CM * (SLOW_RE * SLOW_RE) / (re * re + SLOW_RE * SLOW_RE);
+}
+
+function pitchCoefficient(m: AeroModel, alpha: number, elevator: number, s: number, cl: number, cd: number, re: number): number {
   // The side-edge vortices push at mid-chord: a quarter chord behind the neutral point.
-  const attached = m.cm0 + m.cma * alpha + m.cmd * elevator
+  const attached = m.cm0 + slowAir(re) + m.cma * alpha + m.cmd * elevator
     - vortexLift(m, alpha) * (VORTEX_AT - 0.25 + m.staticMargin);
   // The push, square to the plate, and how far behind the balance it acts.
   const normal = cl * Math.cos(alpha) + cd * Math.sin(alpha);
@@ -331,6 +372,9 @@ export interface FlightPoint {
   /** Which way it flies and which way its lift points, unit vectors (x along the throw, y to its side, z up). */
   readonly fwd?: Vec3;
   readonly up?: Vec3;
+  /** The aeroplane itself: where its nose points and where its top faces, same axes. */
+  readonly nose?: Vec3;
+  readonly top?: Vec3;
   readonly bank?: number;
   readonly lift?: number;
   readonly drag?: number;
@@ -399,7 +443,8 @@ export function glideMargin(af: Airframe, m: AeroModel, elevatorDeg: number): nu
   const t = trim(af, m, de);
   if (!t) return m.staticMargin;
   const h = 0.25 * Math.PI / 180;
-  const cm = (a: number) => pitchCoefficient(m, a, de, 0, 0, 0);
+  const re = (t.speed * af.meanChord) / NU;
+  const cm = (a: number) => pitchCoefficient(m, a, de, 0, 0, 0, re);
   const cl = (a: number) => m.cla * a + m.cld * de + m.cl0 + vortexLift(m, a);
   const dcl = (cl(t.alpha + h) - cl(t.alpha - h)) / (2 * h);
   return dcl > 1e-6 ? -(cm(t.alpha + h) - cm(t.alpha - h)) / (2 * h) / dcl : m.staticMargin;
@@ -413,17 +458,26 @@ export function trim(af: Airframe, m: AeroModel, elevator: number) {
    * since the side-edge vortices steepen it as the angle grows - a plane
    * balanced right on its neutral point still finds its glide.
    */
-  const at = (a: number) => pitchCoefficient(m, a, elevator, 0, 0, 0);
-  const step = 0.25 * Math.PI / 180;
-  let alpha = -1;
-  for (let a = step; a <= m.stall; a += step) {
-    if (at(a - step) > 0 && at(a) <= 0) { alpha = a - step * at(a - step) / (at(a - step) - at(a) || 1); break; }
+  // The balance depends on the speed (see `slowAir`) and the speed on the balance: settled in a few rounds.
+  let speed = 5;
+  let found: { alpha: number; speed: number; ratio: number } | null = null;
+  for (let round = 0; round < 6; round++) {
+    const re = (speed * af.meanChord) / NU;
+    const at = (a: number) => pitchCoefficient(m, a, elevator, 0, 0, 0, re);
+    const step = 0.25 * Math.PI / 180;
+    let alpha = -1;
+    for (let a = step; a <= m.stall; a += step) {
+      if (at(a - step) > 0 && at(a) <= 0) { alpha = a - step * at(a - step) / (at(a - step) - at(a) || 1); break; }
+    }
+    if (!(alpha > 0) || alpha > m.stall) return null;
+    const { cl, cd } = polar(m, alpha, elevator, speed, af.meanChord);
+    if (!(cl > 0)) return null;
+    const next = Math.sqrt((2 * af.mass.mass * G) / (RHO * af.wingArea * cl));
+    found = { alpha, speed: next, ratio: cl / cd };
+    if (Math.abs(next - speed) < 0.01) break;
+    speed = next;
   }
-  if (!(alpha > 0) || alpha > m.stall) return null;
-  const { cl, cd } = polar(m, alpha, elevator, 5, af.meanChord);
-  if (!(cl > 0)) return null;
-  const speed = Math.sqrt((2 * af.mass.mass * G) / (RHO * af.wingArea * cl));
-  return { alpha, speed, ratio: cl / cd };
+  return found;
 }
 
 /**
@@ -535,6 +589,108 @@ function eulerOf(e: Vec3, u: Vec3, last: { gamma: number; heading: number; bank:
 }
 
 
+/**
+ * The keel and the winglets as upright surfaces (see `SideSurface`). The keel
+ * is read off the side map, cell by cell; a winglet is several plies lying on
+ * each other, and each ply is a face of its own - counted once, as the air
+ * sees the side of it.
+ */
+export function sideSurfaces(spec: PlaneSpec): SideSurface[] {
+  const out: SideSurface[] = [];
+  const cg = spec.af.cgFromNose;
+  const k = spec.keel;
+  let area = 0; let mx = 0; let mz = 0; let lo = Infinity; let hi = -Infinity;
+  for (let r = 0; r < k.nz; r++) {
+    for (let col = 0; col < k.nx; col++) {
+      if (k.plies[r * k.nx + col]! === 0) continue;
+      const x = k.x0 + col * CELL; const z = k.z0 + r * CELL;
+      area += CELL * CELL; mx += x * CELL * CELL; mz += z * CELL * CELL;
+      lo = Math.min(lo, z); hi = Math.max(hi, z + CELL);
+    }
+  }
+  if (area > 0) out.push({ area, fromNose: cg - mx / area, below: mz / area, height: hi - lo, winglet: false });
+  /*
+   * Each side's pieces are one winglet: a winglet folded along the whole tip
+   * is several faces, front and back of the rolled nose, and taken one by one
+   * each little square piece had the lift slope of a square, not of the long
+   * low strip it is part of.
+   */
+  for (const sign of [-1, 1]) {
+    const seen: Fin[] = [];
+    for (const f of spec.fins) {
+      if (Math.sign(f.centre[1]) !== sign) continue;
+      // The same ply again, folded on top: as far from it as the paper is thick, and as large.
+      if (seen.some((g) => Math.hypot(g.centre[0] - f.centre[0], g.centre[1] - f.centre[1], g.centre[2] - f.centre[2]) < 0.003
+        && Math.abs(g.area - f.area) < 0.15 * Math.max(g.area, f.area))) continue;
+      seen.push(f);
+    }
+    const a = seen.reduce((sum, f) => sum + f.area, 0);
+    if (!(a > 0)) continue;
+    const x = seen.reduce((sum, f) => sum + f.area * f.centre[0], 0) / a;
+    const z = seen.reduce((sum, f) => sum + f.area * f.centre[2], 0) / a;
+    const h = Math.max(1e-3, ...seen.map((f) => f.height));
+    out.push({ area: a, fromNose: cg - x, below: z, height: h, winglet: true });
+  }
+  return out;
+}
+
+
+/** How much of a winglet's back edge is bent to turn, m: the last centimetre, as the elevator is a set size. */
+export const RUDDER = 0.01;
+
+/** Lift slope of an upright surface standing on the wing, per radian: the wing doubles its span, as a plate against a wall. */
+function sideSlope(area: number, height: number): number {
+  const ar = area > 0 ? (2 * height * height) / area : 0;
+  return (2 * Math.PI * ar) / (2 + Math.sqrt(ar * ar + 4));
+}
+
+/**
+ * The aeroplane's sideways derivatives, each from its own shape - the usual
+ * estimates of flight dynamics texts (USAF DATCOM, and strip theory for the
+ * wing), not tuned:
+ *
+ *  - side force with sideslip: the keel's and winglets' side areas, each at
+ *    the lift slope of an upright plate standing on the wing;
+ *  - the nose held into the wind (weathercock): that side force at its arm
+ *    behind the centre of gravity, and yawing damped by the same at the arm
+ *    squared;
+ *  - rolled level against a sideslip: the wings' V, a quarter of the lift
+ *    slope per radian of it for a straight wing, and each upright surface by
+ *    its height above or below the centre of gravity - winglets above roll it
+ *    level, a keel hanging below the other way;
+ *  - rolling damped by the wing: a sixth of the lift slope (strip theory,
+ *    straight wing);
+ *  - turned by the winglets bent: their last centimetre (RUDDER) as a flap
+ *    on the whole winglet, as strong as thin-aerofoil theory gives a flap of
+ *    that share of its length. A plane without winglets is turned by the
+ *    back of its keel the same way.
+ */
+export function lateral(af: Airframe, m: AeroModel) {
+  const S = af.wingArea;
+  const b = Math.max(1e-3, af.span);
+  let cyb = 0; let cnb = 0; let cnr = 0; let clb = -(m.cla / 4) * af.dihedral; let cnd = 0;
+  const side = m.side ?? [];
+  const wings = side.some((f) => f.winglet);
+  for (const f of side) {
+    const a = sideSlope(f.area, f.height);
+    const arm = f.fromNose - af.cgFromNose;
+    cyb -= (a * f.area) / S;
+    cnb += (a * f.area * arm) / (S * b);
+    cnr -= (2 * a * f.area * arm * arm) / (S * b * b);
+    // Pushed sideways above the centre of gravity, it rolls away from the push.
+    clb += (a * f.area * f.below) / (S * b);
+    if (f.winglet || !wings) {
+      // The last centimetre bent, as a flap on the whole surface: thin-aerofoil flap effectiveness for its share of the length.
+      const share = Math.min(1, RUDDER / Math.max(RUDDER, f.area / f.height));
+      const th = Math.acos(2 * share - 1);
+      const tau = 1 - (th - Math.sin(th)) / Math.PI;
+      cnd += (tau * a * f.area * arm) / (S * b);
+    }
+  }
+  return { cyb, cnb, cnr, clb, clp: -m.cla / 6, cnd };
+}
+
+
 /*
  * Four-millisecond steps: the fourth-order steps give the same flights to a
  * hundredth of a second as a millisecond did, every book plane's kind of
@@ -556,33 +712,35 @@ export function fly(af: Airframe, m: AeroModel, launch: Launch, dt = 0.004): Fli
    */
   const mass = af.mass.mass;
   const W = mass * G;
-  const iyy = Math.max(1e-9, af.mass.inertia[1]);
+  const [ixx0, iyy0, izz0] = af.mass.inertia;
+  const ixx = Math.max(1e-9, ixx0);
+  const iyy = Math.max(1e-9, iyy0);
+  const izz = Math.max(1e-9, izz0);
   const S = af.wingArea;
   const c = af.meanChord;
+  const b = Math.max(1e-3, af.span);
   const de = (launch.elevatorDeg * Math.PI) / 180;
+  const dr = ((launch.rudderDeg ?? 0) * Math.PI) / 180;
   const up = (launch.angleDeg * Math.PI) / 180;
   const bank0 = ((launch.bankDeg ?? 0) * Math.PI) / 180;
+  const lat = lateral(af, m);
   /*
-   * How fast the wings come level: faster with more V to them, and hardly at
-   * all while the aeroplane is still going fast - the sideways lift of the
-   * climb holds it on its side until it slows near the top. That is when it
-   * rolls out, which is the transition the guide times with its tuning.
-   */
-  // Wings drooping (anhedral) roll it further over instead: the rate turns negative.
-  const dih = af.dihedral >= 0 ? Math.max(0.05, af.dihedral) : af.dihedral;
-  const levelling = (V: number) => (ROLL_LEVEL * dih) / (1 + (V / ROLL_SPEED) ** 2);
-  /*
-   * In the air, as vectors: where it is, its velocity, and which way its lift
-   * points (the aeroplane's "up", square to the velocity), then its angle of
-   * attack and pitch rate - all relative to the air.
+   * Flown as a body in the air, in all six of its ways: along, across and up,
+   * and pitching, rolling and yawing - the equations every flight simulator
+   * flies (JSBSim's among them), with the forces read off this aeroplane.
    *
-   * It was flown as climb angle, heading and bank. Straight up those mean
-   * nothing: a heading has no direction to point, and a plane thrown on its
-   * side near the vertical spun its heading round twice in half a second
-   * while its sideways lift, which should have bent the climb over to one
-   * side, was spent turning a compass that was not there. As vectors the lift
-   * bends the path whichever way it points, straight up or not, and the
-   * angles are only read off them to be shown.
+   * It was flown as a point that only pitched, its bank rolled level at a rate
+   * chosen to match the guide, and nothing could make it turn: a winglet bent
+   * to one side, which is how the guide sets a plane circling, did nothing.
+   * Now the air on the keel and the winglets holds the nose into the wind and
+   * pushes it round when they are bent, the V of the wings rolls it level
+   * against a sideslip, and the wings damp its rolling - each from the
+   * aeroplane's own shape (see `lateral`).
+   *
+   * The body is carried as two of its axes in the air's frame - where its nose
+   * points and where its top faces - and its turning rates about its own axes:
+   * roll about the nose (right wing down), pitch about the right wing (nose
+   * up), yaw about its floor (nose right).
    */
   /*
    * The hand moves over the ground; the aeroplane flies in the air. Thrown
@@ -595,10 +753,10 @@ export function fly(af: Airframe, m: AeroModel, launch: Launch, dt = 0.004): Fli
   const az = launch.speed * Math.sin(up);
   const airUp = Math.atan2(az, Math.hypot(ax, ay));
   const e0 = unit3([ax, ay, az]);
-  // Up square to the flight in the vertical plane, rolled by the bank: a positive bank lifts toward +y.
+  // Nose along the throw, its top square to it in the vertical plane, rolled by the bank: a positive bank lifts toward +y.
   const level0 = levelUp(e0) ?? unit3([-e0[0], -e0[1], 0]);
   const u0 = add3(scale3(level0, Math.cos(bank0)), scale3(cross3(level0, e0), Math.sin(bank0)));
-  let st = [0, 0, launch.height, ax, ay, az, u0[0], u0[1], u0[2], 0, 0];
+  let st = [0, 0, launch.height, ax, ay, az, e0[0], e0[1], e0[2], u0[0], u0[1], u0[2], 0, 0, 0];
   let maxLoad = 0;
   let maxAir = 0;
   let stalled = false;
@@ -624,50 +782,43 @@ export function fly(af: Airframe, m: AeroModel, launch: Launch, dt = 0.004): Fli
   const deriv = (s: number[]) => {
     const v: Vec3 = [s[3]!, s[4]!, s[5]!];
     const V0 = Math.hypot(v[0], v[1], v[2]);
-    const e = V0 > 1e-9 ? scale3(v, 1 / V0) : e0;
+    const n = unit3([s[6]!, s[7]!, s[8]!]);
+    const top = squareTo([s[9]!, s[10]!, s[11]!], n);
+    const right = cross3(n, top);
+    const down = scale3(top, -1);
+    const [p, q, r] = [s[12]!, s[13]!, s[14]!];
     const V = Math.max(0.3, V0);
-    const u = squareTo([s[6]!, s[7]!, s[8]!], e);
-    const alpha0 = s[9]!;
-    const q = s[10]!;
-    const alpha = Math.atan2(Math.sin(alpha0), Math.cos(alpha0));
+    const e = V0 > 1e-9 ? scale3(v, 1 / V0) : n;
+    // The air as the aeroplane meets it: angle of attack, and sideslip (the flight sliding to its right).
+    const alpha = Math.atan2(dot3(e, down), dot3(e, n));
+    const beta = Math.asin(Math.max(-1, Math.min(1, dot3(e, right))));
     const { cl, cd, s: sep } = polar(m, alpha, de, V, c);
     const qbar = 0.5 * RHO * V * V;
     const L = qbar * S * cl;
     const D = qbar * S * cd;
-    const cm = pitchCoefficient(m, alpha, de, sep, cl, cd) + m.cmq * ((q * c) / (2 * V));
-    // Lift along up, drag against the flight, weight down.
-    const acc: Vec3 = [(L * u[0] - D * e[0]) / mass, (L * u[1] - D * e[1]) / mass, (L * u[2] - D * e[2]) / mass - G];
-    // How the direction of flight turns, and so how the up turns with it to stay square.
-    const along = dot3(acc, e);
-    const eDot: Vec3 = [(acc[0] - along * e[0]) / V, (acc[1] - along * e[1]) / V, (acc[2] - along * e[2]) / V];
-    /*
-     * The V rolls it level about the flight: toward the up that is square to
-     * the flight in the vertical plane. Going straight up there is no such
-     * up - no side is lower than the other - and nothing rolls it.
-     */
-    /*
-     * What rolls it is the weight's pull across the wings: nothing when the
-     * wings are level, most on its side, nothing again right way up or upside
-     * down in a loop, where the weight lies in the plane of the wings'
-     * symmetry. Read as a rate of -sin(bank) times the V's own rate, measured
-     * from the up square to the flight in the vertical plane. Taken as the
-     * bank itself, a loop reads a bank of 180 degrees over the top and was
-     * rolled out of it at full rate.
-     */
-    const spin = cross3(u, e);
-    const lvRaw = Math.hypot(e[0], e[1]);
-    const phiDot = lvRaw > 0.05 ? levelling(V) * (spin[2] / lvRaw) : 0;
-    const ue = dot3(u, eDot);
+    const Y = qbar * S * lat.cyb * beta;
+    // Lift square to the air and to the wings, drag against the flight, side force across, weight down.
+    const liftDir = squareTo(cross3(right, e), e);
+    const acc: Vec3 = [
+      (L * liftDir[0] - D * e[0] + Y * right[0]) / mass,
+      (L * liftDir[1] - D * e[1] + Y * right[1]) / mass,
+      (L * liftDir[2] - D * e[2] + Y * right[2]) / mass - G,
+    ];
+    const ph = (p * b) / (2 * V);
+    const rh = (r * b) / (2 * V);
+    const pitchM = qbar * S * c * (pitchCoefficient(m, alpha, de, sep, cl, cd, (V * c) / NU) + m.cmq * ((q * c) / (2 * V)));
+    const rollM = qbar * S * b * (lat.clb * beta + lat.clp * ph + (cl / 4) * rh);
+    const yawM = qbar * S * b * (lat.cnb * beta + (lat.cnr - cd / 4) * rh - (cl / 8) * ph + lat.cnd * dr);
+    // Its turning, about its own axes (Euler's equations), and how its axes swing with it.
+    const pd = (rollM - (izz - iyy) * q * r) / ixx;
+    const qd = (pitchM - (ixx - izz) * r * p) / iyy;
+    const rd = (yawM - (iyy - ixx) * p * q) / izz;
+    const w: Vec3 = add3(add3(scale3(n, p), scale3(right, q)), scale3(down, r));
+    const nd = cross3(w, n);
+    const td = cross3(w, top);
     return {
-      d: [
-        v[0], v[1], v[2],
-        acc[0], acc[1], acc[2],
-        -ue * e[0] + phiDot * spin[0], -ue * e[1] + phiDot * spin[1], -ue * e[2] + phiDot * spin[2],
-        // The angle of attack: the nose's pitch less the flight's turn in the plane of symmetry.
-        q - (L - W * u[2]) / (mass * V),
-        (qbar * S * c * cm) / iyy,
-      ],
-      L, D, V, alpha,
+      d: [v[0], v[1], v[2], acc[0], acc[1], acc[2], nd[0], nd[1], nd[2], td[0], td[1], td[2], pd, qd, rd],
+      L, D, V, alpha, e, liftDir,
     };
   };
 
@@ -701,10 +852,14 @@ export function fly(af: Airframe, m: AeroModel, launch: Launch, dt = 0.004): Fli
     t += dt;
     steps++;
     if (!st.every(Number.isFinite)) { diverged = true; break; }
-    // Kept a unit vector square to the flight.
+    // The body's axes kept square and of unit length.
+    const nNow = unit3([st[6]!, st[7]!, st[8]!]);
+    const tNow = squareTo([st[9]!, st[10]!, st[11]!], nNow);
+    st[6] = nNow[0]; st[7] = nNow[1]; st[8] = nNow[2];
+    st[9] = tNow[0]; st[10] = tNow[1]; st[11] = tNow[2];
     const eNow = unit3([st[3]!, st[4]!, st[5]!]);
-    const uNow = squareTo([st[6]!, st[7]!, st[8]!], eNow);
-    st[6] = uNow[0]; st[7] = uNow[1]; st[8] = uNow[2];
+    // Climb, heading and bank are the flight's, its up the lift's.
+    const uNow = squareTo(k1.liftDir, eNow);
     angles = eulerOf(eNow, uNow, angles);
     const g = ground(st, t);
     maxLoad = Math.max(maxLoad, Math.abs(k1.L) / W);
@@ -717,7 +872,7 @@ export function fly(af: Airframe, m: AeroModel, launch: Launch, dt = 0.004): Fli
     if (Math.abs(k1.alpha) > m.stall && t > apexT + 1.5) stalledTime += dt;
     if (stalledTime > 1) stalled = true;
     // Nose angle above the horizon, as seen in the plane of the climb.
-    pitch = angles.gamma + st[9]! * Math.cos(angles.bank);
+    pitch = angles.gamma + k1.alpha * Math.cos(angles.bank);
     // The climb angle as the eye reads it: a loop adds a whole turn to it, and
     // read raw, a plane gliding level after a loop was never level again.
     const climb = Math.asin(Math.max(-1, Math.min(1, eNow[2])));
@@ -737,7 +892,7 @@ export function fly(af: Airframe, m: AeroModel, launch: Launch, dt = 0.004): Fli
       path.push({
         t, x: Math.hypot(g.x, g.y) * Math.sign(g.x || 1), h: Math.max(0, g.h), pitch,
         speed: k1.V, alpha: k1.alpha, gamma: angles.gamma, bank: angles.bank, lift: k1.L, drag: k1.D,
-        gx: g.x, gy: g.y, heading: angles.heading, fwd: eNow, up: uNow,
+        gx: g.x, gy: g.y, heading: angles.heading, fwd: eNow, up: uNow, nose: nNow, top: tNow,
       });
     }
     if (g.h <= 0) break;
@@ -1141,7 +1296,7 @@ export interface Forces {
  */
 export function forcesAt(af: Airframe, m: AeroModel, alpha: number, speed: number, elevator: number): Forces {
   const { cl, cd, s } = polar(m, alpha, elevator, speed, af.meanChord);
-  const cm = pitchCoefficient(m, alpha, elevator, s, cl, cd);
+  const cm = pitchCoefficient(m, alpha, elevator, s, cl, cd, (speed * af.meanChord) / NU);
   const q = 0.5 * RHO * speed * speed;
   return {
     cl, cd, cm,

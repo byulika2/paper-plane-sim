@@ -13,13 +13,14 @@ import { rolledBack } from '../aero/airframe.js';
 import { renderFaces } from '../origami/space.js';
 import { SHEET_SIZES, paperProps } from '../paper/stock.js';
 import type { PaperProps } from '../paper/stock.js';
-import { bendElevator } from './elevator.js';
+import { ELEVATOR, ELEVATOR_STEPS, bendElevator } from './elevator.js';
 import type { ElevatorTune } from './elevator.js';
 import { foldEdges, replay, rollRetreat } from './foldSession.js';
 import type { Step } from './foldSession.js';
 import { DEFAULT_FLIGHT, balanceGrade, flightBase, flightReport, flyingVee, liftWings } from './flightReport.js';
 import type { FlightSettings, Grade } from './flightReport.js';
 import { runThrows, summarize, throwsAround } from './flightStats.js';
+import { fly } from '../aero/flight.js';
 import { longest, recommendElevator, recommendElevatorTimed } from './recommend.js';
 import { readSessionFile } from './sessionFile.js';
 
@@ -55,6 +56,8 @@ export interface CardFlight {
   readonly elevator: ElevatorTune;
   /** The throw angle it was judged at, degrees: the flying screen opens at it. */
   readonly angle: number;
+  /** Each wing's rise off level it was judged with, degrees: the flying screen opens at it. */
+  readonly vee: number;
   readonly recommended: boolean;
 }
 
@@ -248,27 +251,78 @@ export function cardShape(r: PlaneRecord, flying = true): CardShape | null {
   return out;
 }
 
+/** The tuning a plane flies longest with: throw angle, elevator and each wing's rise, degrees. */
+export interface Tuning { readonly angle: number; readonly elevator: number; readonly vee: number }
+
+/** The angles, elevators and wing rises the pupil can set, each tried with all the others. */
+export const TUNE_ANGLES = [30, 40, 50, 60, 70, 80, 90] as const;
+export const TUNE_VEES = [0, 5, 10, 15, 20, 25, 30] as const;
+
+const tunings = new Map<string, Tuning | null>();
+
+/*
+ * The plane tuned as a pupil tunes it: every throw angle, elevator and wing
+ * rise on the flying screen tried against every other, each thrown once into
+ * still air, and the two dozen that stay up longest thrown a dozen times more
+ * into the air's small stirrings - a setting that flies only when the air is
+ * kind is not the best one. Thrown as the card is thrown: a grown-up's
+ * overhand, wings level, winglets straight. It depends on the paper and the
+ * folds alone, so one plane has one tuning.
+ */
+export function bestTuning(r: PlaneRecord): Tuning | null {
+  const k = modelKeyOf(r);
+  if (tunings.has(k)) return tunings.get(k)!;
+  const { paper, spec, af } = modelOf(r);
+  let out: Tuning | null = null;
+  if (spec && af && af.wingArea > 1e-6 && af.meanChord > 1e-6) {
+    const region = { y0: ELEVATOR.fromCm / 100, y1: (ELEVATOR.fromCm + ELEVATOR.widthCm) / 100, depth: ELEVATOR.depthCm / 100 };
+    const base = flightBase(spec, region);
+    const tried: { t: Tuning; time: number }[] = [];
+    for (const vee of TUNE_VEES) {
+      // The wings' rise changes the aeroplane; the angle and the elevator only the throw.
+      const rep = flightReport(base, spec, paper, { ...DEFAULT_FLIGHT, region, vee, elevator: 0 });
+      for (const angle of TUNE_ANGLES) {
+        for (const elevator of ELEVATOR_STEPS) {
+          // Tilted the degree or two a hand does: exactly level, a throw over the top comes straight back down.
+          const f = fly(rep.af, rep.m, { ...rep.launch, angleDeg: angle, elevatorDeg: elevator, bankDeg: 2 }, 0.004);
+          tried.push({ t: { angle, elevator, vee }, time: f.time });
+        }
+      }
+    }
+    tried.sort((a, b) => b.time - a.time);
+    let top = -Infinity;
+    for (const { t } of tried.slice(0, 24)) {
+      const rep = flightReport(base, spec, paper, { ...DEFAULT_FLIGHT, region, angle: t.angle, elevator: t.elevator, vee: t.vee });
+      const results = runThrows(rep.af, rep.m, throwsAround(rep.launch, 12), 0, 12);
+      const time = results.reduce((sum, x) => sum + x.time, 0) / Math.max(1, results.length);
+      if (time > top + 1e-6) { top = time; out = t; }
+    }
+  }
+  keep(tunings, k, out, 48);
+  return out;
+}
+
 const flights = new Map<string, CardFlight | null>();
 
 export function cardFlight(r: PlaneRecord): CardFlight | null {
-  const k = keyOf(r);
+  const k = modelKeyOf(r);
   if (flights.has(k)) return flights.get(k)!;
   const { paper, spec, af } = modelOf(r);
   let out: CardFlight | null = null;
-  if (spec && af && af.wingArea > 1e-6 && af.meanChord > 1e-6) {
+  const t = bestTuning(r);
+  if (spec && af && t) {
     /*
-     * Judged untuned: its own paper as it was folded, the elevator flat, at
-     * its throw angle. A plane that lifts hard loops and gives its height
-     * away, and that is its score - the elevator is tried in the simulator.
-     * The recommended elevator is still worked out, but only to be shown.
+     * Judged at its best tuning (bestTuning), as a pupil would fly it after
+     * tuning it: the same numbers whether read off the list or the flying
+     * screen, which opens at that tuning.
      */
-    const thrown = { ...DEFAULT_FLIGHT, angle: r.throwAngle ?? DEFAULT_FLIGHT.angle };
-    const e = recommendFor(r, thrown)!;
-    const base = flightBase(spec);
-    const rep = flightReport(base, spec, paper, { ...thrown, vee: r.vee ?? null, elevator: 0 });
+    const region = { y0: ELEVATOR.fromCm / 100, y1: (ELEVATOR.fromCm + ELEVATOR.widthCm) / 100, depth: ELEVATOR.depthCm / 100 };
+    const base = flightBase(spec, region);
+    const rep = flightReport(base, spec, paper, { ...DEFAULT_FLIGHT, region, angle: t.angle, elevator: t.elevator, vee: t.vee });
     const results = runThrows(rep.af, rep.m, throwsAround(rep.launch, CARD_THROWS), 0, CARD_THROWS);
     const stats = summarize(results, spec, paper);
-    out = { time: stats.time.mean, glideRatio: stats.glideRatio, weight: af.mass.mass * 1000, height: stats.height.mean, grades: [...stats.grades, balanceGrade(rep.margin)], elevator: e, angle: thrown.angle, recommended: true };
+    out = { time: stats.time.mean, glideRatio: stats.glideRatio, weight: af.mass.mass * 1000, height: stats.height.mean, grades: [...stats.grades, balanceGrade(rep.margin)],
+      elevator: { ...ELEVATOR, angleDeg: t.elevator, auto: true }, angle: t.angle, vee: t.vee, recommended: true };
   }
   keep(flights, k, out, 48);
   return out;

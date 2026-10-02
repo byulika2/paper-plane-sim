@@ -26,8 +26,14 @@ interface Props {
   colours: Record<Phase, string>;
 }
 
-// The floor's x along the throw, y up, z to its side.
-const at = (p: FlightPoint) => new THREE.Vector3(p.gx ?? p.x, p.h, p.gy ?? 0);
+/*
+ * The floor's x along the throw, y up, z to the right of the throw. The
+ * flight's own side axis points left, so it is turned over into the room's -
+ * taken as it came, the room was a mirror of the flight, and a plane turning
+ * left was drawn turning right.
+ */
+const at = (p: FlightPoint) => new THREE.Vector3(p.gx ?? p.x, p.h, -(p.gy ?? 0));
+const room = (v: readonly number[]) => new THREE.Vector3(v[0]!, v[2]!, -v[1]!);
 
 /**
  * The aeroplane's attitude, from the flight's own vectors: the nose raised
@@ -36,19 +42,26 @@ const at = (p: FlightPoint) => new THREE.Vector3(p.gx ?? p.x, p.h, p.gy ?? 0);
  * heading means nothing.
  */
 function attitude(p: FlightPoint): THREE.Quaternion {
+  // The body's own axes when the flight carries them; else built from the flight and the angle of attack.
+  if (p.nose && p.top) {
+    const nose = room(p.nose).normalize();
+    const top = room(p.top).normalize();
+    const right = new THREE.Vector3().crossVectors(nose, top);
+    return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(nose, top, right));
+  }
   if (p.fwd && p.up) {
-    // Flight axes (x along the throw, y to its side, z up) to the floor's (x, y up, z side).
-    const e = new THREE.Vector3(p.fwd[0], p.fwd[2], p.fwd[1]);
-    const u = new THREE.Vector3(p.up[0], p.up[2], p.up[1]);
+    // Flight axes to the room's (see `room`).
+    const e = room(p.fwd);
+    const u = room(p.up);
     const a = p.alpha ?? 0;
     const nose = e.clone().multiplyScalar(Math.cos(a)).addScaledVector(u, Math.sin(a)).normalize();
     const top = u.clone().multiplyScalar(Math.cos(a)).addScaledVector(e, -Math.sin(a)).normalize();
     const right = new THREE.Vector3().crossVectors(nose, top);
     return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(nose, top, right));
   }
-  const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -(p.heading ?? 0));
+  const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), p.heading ?? 0);
   const pitch = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), (p.gamma ?? 0) + (p.alpha ?? 0));
-  const roll = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), p.bank ?? 0);
+  const roll = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -(p.bank ?? 0));
   return yaw.multiply(pitch).multiply(roll);
 }
 
@@ -153,8 +166,8 @@ export function FlightScene3D({ af, drawPlies, vee, flight, t, colours }: Props)
       if (live.current.follow) {
         // Behind it and to the side, a little above, catching up smoothly.
         const heading = p.heading ?? 0;
-        const back = new THREE.Vector3(-Math.cos(heading), 0, -Math.sin(heading));
-        const side = new THREE.Vector3(-Math.sin(heading), 0, Math.cos(heading));
+        const back = new THREE.Vector3(-Math.cos(heading), 0, Math.sin(heading));
+        const side = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
         const want = where.clone().addScaledVector(back, 1.6).addScaledVector(side, 1.2).add(new THREE.Vector3(0, 0.6, 0));
         camera.position.lerp(want, 0.08);
         controls.target.lerp(where, 0.2);

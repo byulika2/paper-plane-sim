@@ -1148,5 +1148,8 @@ input.scrub:hover { border-color: color-mix(in srgb, var(--accent) 55%, transpar
 .flight-slider input[type=range] { width: 100%; display: block; }
 .flight-marks { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim); margin-top: -2px; }
 /* A row of values to pick, the flat one in the middle. */
-.flight-steps { display: grid; grid-template-columns: repeat(9, 1fr); gap: 3px; margin-top: 6px; }
+.flight-steps { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; margin-top: 6px; }
 .flight-steps button { padding: 4px 0; font-size: 12px; min-width: 0; }
+.flight-apply-tuning { width: 100%; margin-top: 12px; padding: 8px; display: flex; flex-direction: column; gap: 2px; align-items: center; }
+.flight-apply-tuning small { font-size: 11px; color: var(--dim); }
+.flight-apply-tuning + .flight-apply-all { margin-top: 6px; }

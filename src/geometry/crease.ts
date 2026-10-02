@@ -117,6 +117,9 @@ export function traceCrease(model: FoldModel, line: Line, step: number): TaggedC
 export interface ViewCrease extends TaggedCrease {
   /** Index of the ply this mark is currently riding on. */
   readonly layer: number;
+  /** The same mark where it lies on the sheet: on the paper it was pressed into and no other. */
+  readonly sheetA: Vec2;
+  readonly sheetB: Vec2;
 }
 
 /** Bring stored sheet-space marks into the current folded view. */
@@ -133,13 +136,15 @@ export function creasesInView(
           b: affineApply(layer.xf, piece.b),
           step: crease.step,
           layer: index,
+          sheetA: piece.a,
+          sheetB: piece.b,
         });
       }
     }
   });
-  // Plies stacked on top of each other repeat the same mark in the same place.
+  // Plies stacked on top of each other repeat the same mark in the same place: the topmost is kept, the one in sight.
   const seen = new Map<string, ViewCrease>();
-  for (const c of out) if (!seen.has(segmentKey(c))) seen.set(segmentKey(c), c);
+  for (const c of out) seen.set(segmentKey(c), c);
   return [...seen.values()];
 }
 
@@ -182,6 +187,9 @@ export interface Dimension {
 
 export interface ViewDimension extends Dimension {
   readonly layer: number;
+  /** Where it was measured on the sheet. */
+  readonly sheetA: Vec2;
+  readonly sheetB: Vec2;
   /** Measured length, metres. Folding never changes it. */
   readonly length: number;
 }
@@ -244,7 +252,7 @@ export function dimensionsInView(
       const key = dimKey({ a, b, step: d.step });
       if (seen.has(key)) continue;
       seen.set(key, {
-        a, b, step: d.step, layer: index,
+        a, b, step: d.step, layer: index, sheetA: d.a, sheetB: d.b,
         length: Math.hypot(d.b[0] - d.a[0], d.b[1] - d.a[1]),
       });
     }

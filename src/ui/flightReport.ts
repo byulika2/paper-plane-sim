@@ -12,7 +12,7 @@
 import type { Airframe } from '../aero/airframe.js';
 import type { PlaneSpec } from '../aero/spec.js';
 import {
-  aeroModel, fly, glideMargin, noseBulge, thicknessFormFactor, wingBending, withCgAt, withDihedral, withNoseBulge, withNoseWeight,
+  aeroModel, fly, glideMargin, noseBulge, sideSurfaces, thicknessFormFactor, wingBending, withCgAt, withDihedral, withNoseBulge, withNoseWeight,
 } from '../aero/flight.js';
 import type { AeroModel, Bending, FlapRegion, Flight, FlightKind, Launch, NoseBulge } from '../aero/flight.js';
 import type { RenderFace } from '../origami/space.js';
@@ -36,6 +36,8 @@ export interface FlightSettings {
   readonly headwind: number;
   readonly crosswind: number;
   readonly elevator: number;
+  /** Winglets' last centimetre bent, degrees: to the right positive, it turns that way. */
+  readonly rudder?: number;
   readonly clips: number;
   /** Wings set in a V, degrees; null to start from the model's. */
   readonly vee: number | null;
@@ -101,7 +103,7 @@ export function flightBase(spec: PlaneSpec, region?: FlapRegion): FlightBase {
   const bare = withNoseBulge(airframe, aeroModel(airframe, region), bulge);
   // The wing as thick as its stacked paper: friction scaled by the section's form factor.
   const { ff } = thicknessFormFactor(spec);
-  return { bulge, bare: { ...bare, wetShare: bare.wetShare * ff, cd0: bare.cd0 + (ff - 1) * (bare.cd0 - bare.cdForm) } };
+  return { bulge, bare: { ...bare, wetShare: bare.wetShare * ff, cd0: bare.cd0 + (ff - 1) * (bare.cd0 - bare.cdForm), side: sideSurfaces(spec) } };
 }
 
 export interface FlightReport {
@@ -217,7 +219,7 @@ export function flightReport(
   const { af, m } = withNoseWeight(c.af, c.m, s.clips * 0.5);
   const launch: Launch = {
     speed: s.speed, angleDeg: s.angle, height: s.height, headwind: s.headwind,
-    crosswind: s.crosswind, elevatorDeg: s.elevator, bankDeg: s.bank, updraft: s.updraft,
+    crosswind: s.crosswind, elevatorDeg: s.elevator, bankDeg: s.bank, rudderDeg: s.rudder ?? 0, updraft: s.updraft,
     ...((s.gust ?? 1) !== 1 ? { gust: s.gust } : {}),
   };
   const flight = fly(af, m, launch);

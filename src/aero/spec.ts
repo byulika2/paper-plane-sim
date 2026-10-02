@@ -115,6 +115,8 @@ export interface Fin {
   readonly area: number;
   readonly centre: Vec3;
   readonly mass: number;
+  /** How tall it stands, m: its reach up or down off the wing. */
+  readonly height: number;
 }
 
 export interface PlaneSpec {
@@ -302,7 +304,9 @@ export function measurePlane(
         const p = f.pts[k]!; const q = f.pts[(k + 1) % f.pts.length]!;
         a += p[0] * q[2] - q[0] * p[2];
       }
-      fins.push({ area: Math.abs(a) / 2, centre, mass: f.area * density });
+      let lo = Infinity; let hi = -Infinity;
+      for (const p of f.pts) { lo = Math.min(lo, p[2]); hi = Math.max(hi, p[2]); }
+      fins.push({ area: Math.abs(a) / 2, centre, mass: f.area * density, height: hi - lo });
       continue;
     }
     let ax = Infinity; let bx = -Infinity; let az = Infinity; let bz = -Infinity;

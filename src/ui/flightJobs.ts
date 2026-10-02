@@ -23,7 +23,7 @@ type Ask = Job extends infer J ? (J extends { id: number } ? Omit<J, 'id'> : nev
  * So a kept answer can be a stale copy of nothing; it is never read for a
  * plane it was not worked out for.
  */
-const CALC_VERSION = 32;
+const CALC_VERSION = 38;
 const STORE_KEY = 'paper-plane.flight-answers.v1';
 const STORE_MAX = 150;
 
@@ -126,7 +126,10 @@ function ask<T>(job: Ask): Promise<T> {
   return p as Promise<T>;
 }
 
-export const cardFlightLater = (record: PlaneRecord) => ask<CardFlight | null>({ kind: 'card', record });
+// The card depends on the paper and the folds alone (see bestTuning): asked by those, so one plane is one answer.
+export const cardFlightLater = (record: PlaneRecord) => ask<CardFlight | null>({
+  kind: 'card', record: { widthMm: record.widthMm, heightMm: record.heightMm, gsm: record.gsm, steps: record.steps },
+});
 export const recommendLater = (record: PlaneRecord, settings?: FlightSettings) =>
   ask<ElevatorTune | null>({ kind: 'recommend', record, settings });
 export const recommendThrowLater = (record: PlaneRecord, settings?: FlightSettings) =>

@@ -751,10 +751,11 @@ for (const ar of [4, 6, 8]) {
  * Thrown the way the guide teaches, Birdman stays up as long as the guide says.
  *
  * The flight model has two figures set against the guide rather than derived
- * (edge drag, and how fast the wings roll level), chosen so that Birdman
- * thrown overhand at a national-team thrower's 25 m/s, on its side, at 75
- * degrees, stays up about 15 to 20 seconds and comes out of the climb into a
- * glide. This keeps them from drifting: change the physics and this says so.
+ * (edge drag, and how much slow air lifts the nose), chosen so that Birdman
+ * thrown overhand at a national-team thrower's 25 m/s, wings level - with the
+ * degree or two of tilt no hand avoids - at 75 degrees, stays up 15 to 30
+ * seconds and comes out of the climb into a glide. This keeps them from
+ * drifting: change the physics and this says so.
  */
 {
   const bird = SAMPLES.find((z) => z.id === 'birdman')!;
@@ -765,7 +766,7 @@ for (const ar of [4, 6, 8]) {
   const spec0 = measurePlane(plies, paper, paper.thickness)!;
   const af0 = spec0.af;
   const { af, m } = withDihedral(af0, withNoseBulge(af0, aeroModel(af0), noseBulge(spec0)), 15);
-  const launch = { speed: 25, angleDeg: 75, height: 2.2, headwind: 0, crosswind: 0, elevatorDeg: 0, bankDeg: 90 };
+  const launch = { speed: 25, angleDeg: 75, height: 2.2, headwind: 0, crosswind: 0, elevatorDeg: 0, bankDeg: 2 };
   const e = bestElevator(af, m, launch);
   const r = fly(af, m, { ...launch, elevatorDeg: e });
   // The best throw there is, an adult's 25 m/s: up to the half minute a pupil's square plane is timed at.

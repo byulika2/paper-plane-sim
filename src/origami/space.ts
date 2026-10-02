@@ -685,14 +685,20 @@ export function segmentInSpace(
   state: FoldedState,
   a: Vec2,
   b: Vec2,
-): Array<{ a: Vec3; b: Vec3; face: number }> {
+  /**
+   * `a` and `b` on the sheet rather than in the folded view: the segment is
+   * then drawn on the paper it is on and nowhere else, not on every ply that
+   * happens to lie over or under it.
+   */
+  onSheet = false,
+): Array<{ a: Vec3; b: Vec3; face: number; sa: Vec2; sb: Vec2 }> {
   const spatial = foldInSpace(state);
-  const out: Array<{ a: Vec3; b: Vec3; face: number }> = [];
+  const out: Array<{ a: Vec3; b: Vec3; face: number; sa: Vec2; sb: Vec2 }> = [];
 
   state.graph.faces_vertices.forEach((loop, face) => {
-    const inv = affineInverse(state.faces_matrix[face]!);
-    const p = affineApply(inv, a);
-    const q = affineApply(inv, b);
+    const inv = onSheet ? null : affineInverse(state.faces_matrix[face]!);
+    const p = inv ? affineApply(inv, a) : a;
+    const q = inv ? affineApply(inv, b) : b;
     const poly = loop.map((v) => state.graph.vertices_coords[v]!);
 
     // Clip the parameter range against every edge of the convex face.
@@ -723,6 +729,9 @@ export function segmentInSpace(
       a: applyRigid(place, embed(at(lo))),
       b: applyRigid(place, embed(at(hi))),
       face,
+      // The same piece on the sheet.
+      sa: at(lo),
+      sb: at(hi),
     });
   });
   return out;

@@ -719,20 +719,51 @@ function pointInPolygon(poly: readonly Vec2[], p: Vec2, tol: number): boolean {
  * where it cannot, and a pattern that cannot lie flat or cannot be stacked
  * says so rather than tearing or passing through itself.
  */
+/**
+ * How near a squash line has to come to a face's edge to lie on it, m: the
+ * rounding of the arithmetic, no more. Taken wider it caught a line from a
+ * corner a fiftieth of a millimetre off a crease, which then was neither
+ * split off nor folded on.
+ */
+const ON_EDGE = 1e-7;
+
 export function collapsePattern(
   state: FoldedState,
-  lines: readonly { readonly a: Vec2; readonly b: Vec2; readonly kind: 'mountain' | 'valley' | 'open' }[],
+  given: readonly { readonly a: Vec2; readonly b: Vec2; readonly kind: 'mountain' | 'valley' | 'open' }[],
 ): CollapseResult {
+  /*
+   * Ends that fall within a thousandth of a millimetre of a corner of the
+   * pattern are that corner: a line run out to the next crease by stepping
+   * along it stops a hair short or long, and a line meant to lie on a crease
+   * already there then ran a hair beside it.
+   */
+  const corner = (p: Vec2): Vec2 => state.graph.vertices_coords.find((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < 1e-6) ?? p;
+  const lines = given.map((l) => ({ ...l, a: corner(l.a), b: corner(l.b) }));
   let graph = state.graph;
   let matrices = [...state.faces_matrix];
   let order = state.faces_order.length === graph.faces_vertices.length
     ? [...state.faces_order] : graph.faces_vertices.map((_, i) => i);
   let bent = state.faces_bent ? [...state.faces_bent] : undefined;
+  /*
+   * The line runs through the face's paper - not merely along its edge. A
+   * line laid exactly on a crease already there (a squash along a line
+   * pressed before) touches the faces on both sides of it, and splitting a
+   * face along its own edge left a face of no area that the walk could not
+   * place, so the squash read as one that cannot lie flat.
+   */
   const crosses = (g: FoldGraph, f: number, a: Vec2, b: Vec2): boolean => {
     const poly = g.faces_vertices[f]!.map((v) => g.vertices_coords[v]!);
+    const offEdges = (p: Vec2) => poly.every((u, i) => {
+      const w = poly[(i + 1) % poly.length]!;
+      const vx = w[0] - u[0]; const vy = w[1] - u[1];
+      const len2 = vx * vx + vy * vy;
+      const t = len2 > 0 ? Math.max(0, Math.min(1, ((p[0] - u[0]) * vx + (p[1] - u[1]) * vy) / len2)) : 0;
+      return Math.hypot(p[0] - u[0] - t * vx, p[1] - u[1] - t * vy) > ON_EDGE;
+    });
     for (let i = 1; i < 64; i++) {
       const t = i / 64;
-      if (pointInPolygon(poly, [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])], -1e-9)) return true;
+      const p: Vec2 = [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
+      if (pointInPolygon(poly, p, -1e-9) && offEdges(p)) return true;
     }
     return false;
   };

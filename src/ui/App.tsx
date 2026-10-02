@@ -37,6 +37,7 @@ import { measurePlane } from '../aero/spec.js';
 import { noseBulge } from '../aero/flight.js';
 import { ELEVATOR, bendElevator, defaultElevator } from './elevator.js';
 import { cardFlightLater, recommendAngleLater, recommendLater, recommendThrowLater } from './flightJobs.js';
+import { pocketFolded } from './pocketOpen.js';
 import { pliesAtLine, pliesUnderLine, pocketHinges, pocketOptions } from '../origami/pocket.js';
 import type { PocketOption } from '../origami/pocket.js';
 import type { FoldedState } from '../origami/folding.js';
@@ -510,7 +511,7 @@ export function App() {
     if (!fs || pocketCount(fs.plies) === null) return;
     const st0 = session.state;
     const found = pocketOptions(st0, fs.a, fs.b, fs.movingSide, pliesAtLine(st0, fs.a, fs.b, fs.movingSide, pocketCount(fs.plies)!),
-      fs.symmetric ? width / 2 : undefined, [{ a: wanted[0], b: wanted[1], how: 'align' }]);
+      fs.symmetric ? width / 2 : undefined, [{ a: wanted[0], b: wanted[1], how: 'align' }], session.creases);
     /*
      * The ways that fold along the line 맞춰 접기 gave, and of those the ones
      * where the line picked really comes to lie on the line named - either
@@ -526,10 +527,23 @@ export function App() {
      * that come nearest are kept, within a centimetre, and the pupil told how
      * near.
      */
-    const near = best < 0.01 ? found.filter((_, i) => gaps[i]! <= Math.max(0.0015, best + 0.0005)) : [];
+    /*
+     * Lined up against a line pressed into the paper before, the paper folds
+     * on that line: a way that uses it is taken over one that lays the lines
+     * a little closer off it, and what does not fit is pushed out at the
+     * sides (the pupil, 2026-10-03: "맞춰 접었기 때문에 아래로 맞고 양쪽
+     * 사이드로 밀렸어야").
+     */
+    const onPressed = found.map((o, i) => (o.pressed && gaps[i]! < 0.01 ? i : -1)).filter((i) => i >= 0);
+    const bestPressed = Math.min(Infinity, ...onPressed.map((i) => gaps[i]!));
+    const near = onPressed.length > 0
+      ? onPressed.filter((i) => gaps[i]! <= bestPressed + 0.0005).map((i) => found[i]!)
+      : best < 0.01 ? found.filter((_, i) => gaps[i]! <= Math.max(0.0015, best + 0.0005)) : [];
     const along = laid ? near : found;
-    const nearNote = laid && best > 0.0015 && near.length > 0
-      ? ` 선이 딱 맞게 붙지는 않고, ${(best * 1000).toFixed(0)}mm쯤 떨어져 가장 가깝게 놓여요.` : '';
+    const nearNote = laid && onPressed.length > 0 && bestPressed > 0.0015
+      ? ` 눌러 둔 자국선을 따라 접어서, 맞춘 선은 ${(bestPressed * 1000).toFixed(0)}mm쯤 옆으로 밀려 놓여요.`
+      : laid && best > 0.0015 && near.length > 0
+        ? ` 선이 딱 맞게 붙지는 않고, ${(best * 1000).toFixed(0)}mm쯤 떨어져 가장 가깝게 놓여요.` : '';
     // One way that lays it exactly: that is the fold asked for. Near but not exact, the pupil looks first.
     if (along.length === 1 && !nearNote) {
       pushStep({ kind: 'collapse', at: fs.movingSide, label: `${fs.label} · 맞춰 접기`, lines: along[0]!.lines });
@@ -612,7 +626,7 @@ export function App() {
       if (isFold(st)) { last = i; break; }
     }
     return session.viewCreases.map((c) => ({
-      a: c.a, b: c.b, kind: lineKindOf(steps[c.step]), latest: c.step === last,
+      a: c.a, b: c.b, kind: lineKindOf(steps[c.step]), latest: c.step === last, sheetA: c.sheetA, sheetB: c.sheetB,
     }));
   }, [session.viewCreases, steps]);
 
@@ -872,34 +886,16 @@ export function App() {
     ? animated.plies.map((f) => (pocketLit.has(f.face) ? { ...f, movedBy: steps.length } : f))
     : animated.plies), [animated.plies, pocketLit, steps.length]);
   // Drawn only, over the model: nothing weighs them, stands the plane up by them or folds them.
+  /*
+   * The first fold made as far as the paper lets it: the plies folded right
+   * over on the line drawn, and where they are still joined to the paper that
+   * stays, bowed up from the pocket's corner (see pocketFolded).
+   */
   const pocketGhosts = useMemo(() => {
     if (!pocketLift) return null;
-    // Turned about their fold line, toward the viewer (-z), by eighty degrees.
-    const LIFT = (80 * Math.PI) / 180;
-    const turnAbout = (a: Vec2, b: Vec2, t: number) => {
-      const ux = b[0] - a[0]; const uy = b[1] - a[1]; const ul = Math.hypot(ux, uy) || 1;
-      const k: [number, number, number] = [ux / ul, uy / ul, 0];
-      const c = Math.cos(t); const sn = Math.sin(t);
-      return (p: readonly [number, number, number]): [number, number, number] => {
-        const v: [number, number, number] = [p[0] - a[0], p[1] - a[1], p[2]];
-        const kv = k[0] * v[0] + k[1] * v[1];
-        const x: [number, number, number] = [k[1] * v[2], -k[0] * v[2], k[0] * v[1] - k[1] * v[0]];
-        return [a[0] + v[0] * c + x[0] * sn + k[0] * kv * (1 - c), a[1] + v[1] * c + x[1] * sn + k[1] * kv * (1 - c), v[2] * c + x[2] * sn];
-      };
-    };
-    return animated.plies.filter((f) => pocketLift.has(f.face)).map((f) => {
-      const [a, b, m] = pocketLift.get(f.face)!;
-      // Whichever way round takes the moving side up toward the viewer.
-      const plus = turnAbout(a, b, LIFT)([m[0], m[1], 0]);
-      const turn = turnAbout(a, b, plus[2] < 0 ? LIFT : -LIFT);
-      const o = turn([0, 0, 0]);
-      const n = turn(f.normal as [number, number, number]);
-      return {
-        ...f, points: f.points.map((q) => turn(q as [number, number, number])),
-        normal: [n[0] - o[0], n[1] - o[1], n[2] - o[2]] as [number, number, number], movedBy: steps.length,
-      };
-    });
-  }, [animated.plies, pocketLift, steps.length]);
+    const ghosts = pocketFolded(animated.plies, pocketLift, pocket?.corners ?? []).map((f) => ({ ...f, movedBy: steps.length }));
+    return ghosts.length ? ghosts : null;
+  }, [animated.plies, pocketLift, pocket, steps.length]);
   const previewIndex = pocketLit || pocketLift ? steps.length : animated.previewIndex;
 
   // The aeroplane's own axes, so the 3D view can stand it up the way it flies.
@@ -964,6 +960,10 @@ export function App() {
   const flightNow = useRef(flightSettings);
   flightNow.current = flightSettings;
   const judging = useRef(false);
+  // The plane's best tuning, once worked out, offered on the flying screen as 추천 튜닝.
+  const [bestTune, setBestTune] = useState<{ angle: number; elevator: number; vee: number } | null>(null);
+  // Another plane, or the folds changed: its tuning is worked out again.
+  useEffect(() => { setBestTune(null); }, [steps]);
   useEffect(() => {
     if (!showFlight) { setRecAsk(null); return; }
     if (recAsk || judging.current || steps.length === 0) return;
@@ -984,7 +984,17 @@ export function App() {
       .then((card) => {
         if (!live || JSON.stringify(stepsRef.current) !== askedFor) return;
         const now = flightNow.current;
-        const next = card ? { ...now, angle: card.angle } : now;
+        /*
+         * The screen opens tuned as the card was judged (bestTuning): the
+         * throw angle, the elevator and the wings' rise that keep it up
+         * longest - the numbers on the results page are then the card's.
+         */
+        const next = card ? { ...now, angle: card.angle, vee: card.vee, bank: 0, rudder: 0 } : now;
+        // Flown at it, not written into the plane: opening a book plane's flying screen must not save a copy of it.
+        if (card) {
+          setFlyElev({ ...ELEVATOR, angleDeg: card.elevator.angleDeg });
+          setBestTune({ angle: card.angle, elevator: card.elevator.angleDeg, vee: card.vee });
+        }
         // Thrown as the card is thrown, the card's elevator is the recommendation.
         const asCard = now.speed === DEFAULT_FLIGHT.speed && now.height === DEFAULT_FLIGHT.height
           && now.bank === DEFAULT_FLIGHT.bank && (now.gust ?? 1) === (DEFAULT_FLIGHT.gust ?? 1)
@@ -1034,7 +1044,9 @@ export function App() {
   const angleKey = recKey && elevUsed ? JSON.stringify([recKey, elevUsed]) : null;
   const [bestAngle, setBestAngle] = useState<{ key: string; angle: number } | null>(null);
   // The card's own angle, while the throw is the card's and the elevator the recommended one.
-  const cardsAngle = !flyElev && judgedAngle && judgedAngle.key === recKey ? judgedAngle.angle : null;
+  const atBest = !!bestTune && !!flyElev && flyElev.angleDeg === bestTune.elevator;
+  const cardsAngle = (!flyElev || atBest) && judgedAngle && judgedAngle.key === recKey ? judgedAngle.angle
+    : atBest ? bestTune!.angle : null;
   useEffect(() => {
     if (!angleKey || !elevUsed || bestAngle?.key === angleKey || cardsAngle !== null) return;
     let live = true;
@@ -2065,12 +2077,13 @@ export function App() {
               {
                 // Answered after another plane was opened, it is not that plane's.
                 const askedFor = JSON.stringify(steps);
-                void recommendThrowLater({ widthMm: sheet.widthMm, heightMm: sheet.heightMm, gsm, steps, vee: flightSettings.vee ?? undefined }, DEFAULT_FLIGHT)
+                // Its best tuning (bestTuning): the throw angle, elevator and wings' rise it flies longest with, kept with the plane.
+                void cardFlightLater({ widthMm: sheet.widthMm, heightMm: sheet.heightMm, gsm, steps })
                   .then((best) => {
                     if (!best || JSON.stringify(stepsRef.current) !== askedFor) return;
                     setElevEdit({ ...best.elevator, auto: true }); setElevOn(true);
-                    setFlightSettings((f) => ({ ...f, angle: best.angle }));
-                    setSavedFlight((f) => ({ ...f, angle: best.angle }));
+                    setFlightSettings((f) => ({ ...f, angle: best.angle, vee: best.vee }));
+                    setSavedFlight((f) => ({ ...f, angle: best.angle, vee: best.vee }));
                   })
                   .catch(() => { /* left flat: it can still be tuned by hand */ });
               }
@@ -2577,7 +2590,8 @@ export function App() {
             elevatorTune={flownElev} recommended={rec}
             onElevatorTune={(patch) => setFlyElev((e) => ({ ...(e ?? flownElev), ...patch, auto: undefined }))}
             onRecompute={() => setRecAsk(flightSettings)}
-            recommendedAngle={cardsAngle ?? (bestAngle && bestAngle.key === angleKey ? bestAngle.angle : null)} />
+            recommendedAngle={cardsAngle ?? (bestAngle && bestAngle.key === angleKey ? bestAngle.angle : null)}
+            bestTune={bestTune} />
         )}
         {showFlight && airframe && !rec && !imported && (
           <div className="flight-overlay"><p className="flight-hint">이 비행기에 맞는 엘리베이터를 찾는 중이에요…</p></div>

@@ -176,7 +176,7 @@ interface Props {
    * the line is not drawn then pressing it appears to do nothing at all. These
    * are the marks the hand would see on the sheet.
    */
-  creases?: readonly { a: Vec2; b: Vec2; kind: LineKind; latest?: boolean }[];
+  creases?: readonly { a: Vec2; b: Vec2; kind: LineKind; latest?: boolean; sheetA?: Vec2; sheetB?: Vec2 }[];
   /**
    * Measured spans, drawn on the paper with their lengths.
    *
@@ -184,7 +184,7 @@ interface Props {
    * where the next fold goes. Recording one and then not drawing it is the same
    * as not recording it.
    */
-  dimensions?: readonly { a: Vec2; b: Vec2; length: number; step?: number }[];
+  dimensions?: readonly { a: Vec2; b: Vec2; length: number; step?: number; sheetA?: Vec2; sheetB?: Vec2 }[];
   /** Creases to pick out on the model, in paper coordinates. */
   highlights?: readonly { a: Vec2; b: Vec2; strong?: boolean }[];
   /** A right-click on the model, with the paper point under it. */
@@ -1080,15 +1080,22 @@ export function Stage3D({
      * weight relative to the paper at the zoom the model opens at, which is
      * where nearly all the looking happens.
      */
+    /*
+     * The model's longest side. It was the span of every coordinate at once -
+     * the least of any x, y or z to the greatest - which stays near the whole
+     * sheet's size however small the folded model gets: the screen zooms in on
+     * the smaller model and every line and dimension thickened fold by fold.
+     */
     const reach = (() => {
-      let lo = Infinity;
-      let hi = -Infinity;
+      const lo = [Infinity, Infinity, Infinity];
+      const hi = [-Infinity, -Infinity, -Infinity];
       for (const ply of plies) {
         for (const q of ply.points) {
-          for (let k = 0; k < 3; k++) { lo = Math.min(lo, q[k]!); hi = Math.max(hi, q[k]!); }
+          for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k]!, q[k]!); hi[k] = Math.max(hi[k]!, q[k]!); }
         }
       }
-      return hi > lo ? hi - lo : 0.3;
+      const side = Math.max(hi[0]! - lo[0]!, hi[1]! - lo[1]!, hi[2]! - lo[2]!);
+      return side > 0 ? side : 0.3;
     })();
     const normalOf = new Map<number, Vec3>();
     /*
@@ -1101,7 +1108,9 @@ export function Stage3D({
      * from the paper altogether.
      */
     const liftOf = new Map<number, Vec3>();
+    // The paper's own: a see-through copy drawn over the model shares its face's number and is not that face.
     for (const ply of plies) {
+      if (normalOf.has(ply.face)) continue;
       normalOf.set(ply.face, ply.normal);
       liftOf.set(ply.face, ply.lift);
     }
@@ -1161,10 +1170,36 @@ export function Stage3D({
       }
     };
 
-    const addMesh = (pts: number[], color: number, opacity = 1) => {
+    /*
+     * `through`: drawn over everything at full strength, under flaps too -
+     * the line being set up and the one just folded. The pressed creases and
+     * the dimensions are drawn full where their paper can be seen and faint
+     * where other paper lies over them, as a drawing shows a hidden line.
+     */
+    const addMesh = (pts: number[], color: number, opacity = 1, through = true, hiddenPts: number[] = pts) => {
       if (pts.length === 0) return;
       const geom = new THREE.BufferGeometry();
       geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts), 3));
+      if (!through) {
+        const mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({
+          color, side: THREE.DoubleSide, transparent: opacity < 1, opacity,
+          // Just enough to sit on its own face; no more, or it shows through the ply a tenth of a millimetre above.
+          polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+        }));
+        mesh.renderOrder = 2;
+        overlay.add(mesh);
+        if (hiddenPts.length === 0) return;
+        // And faintly through the paper over it: the lines under a flap, as a hidden line is drawn.
+        const hiddenGeom = hiddenPts === pts ? geom : new THREE.BufferGeometry();
+        if (hiddenGeom !== geom) hiddenGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(hiddenPts), 3));
+        const hidden = new THREE.Mesh(hiddenGeom, new THREE.MeshBasicMaterial({
+          color, side: THREE.DoubleSide, transparent: true, opacity: opacity * 0.3,
+          depthTest: false, depthWrite: false,
+        }));
+        hidden.renderOrder = 3;
+        overlay.add(hidden);
+        return;
+      }
       /*
        * Drawn last of all, over the see-through flap a fold is about to move
        * as well. Three.js draws everything opaque before anything see-through,
@@ -1221,20 +1256,78 @@ export function Stage3D({
       }
       return out;
     };
+    /*
+     * A crease folded shut is the edge of the paper now, and the round band
+     * drawn there is the fold: a ribbon along it as well, on every ply of a
+     * nose rolled twenty deep, made the edge a solid stripe. A crease lying
+     * on the face's own edge, where the paper beyond it is turned back over
+     * (its normal facing the other way), is left to the band.
+     */
+    const sheetFaces = state.graph.faces_vertices.map((loop) => loop.map((v) => state.graph.vertices_coords[v]!));
+    const onEdge = (poly: readonly Vec2[], p: Vec2, q: Vec2): [Vec2, Vec2] | null => {
+      for (let i = 0; i < poly.length; i++) {
+        const u = poly[i]!; const v = poly[(i + 1) % poly.length]!;
+        const dx = v[0] - u[0]; const dy = v[1] - u[1];
+        const L = Math.hypot(dx, dy) || 1;
+        const off = (r: Vec2) => Math.abs((r[0] - u[0]) * dy - (r[1] - u[1]) * dx) / L;
+        // On the edge itself, not just on the line it runs along: a crease carries on across faces folded far away.
+        const along = (r: Vec2) => ((r[0] - u[0]) * dx + (r[1] - u[1]) * dy) / (L * L);
+        const within = (r: Vec2) => along(r) > -1e-6 && along(r) < 1 + 1e-6;
+        if (off(p) < 1e-6 && off(q) < 1e-6 && within(p) && within(q)) return [u, v];
+      }
+      return null;
+    };
+    const closedEdge = (face: number, p: Vec2, q: Vec2): boolean => {
+      const edge = onEdge(sheetFaces[face]!, p, q);
+      if (!edge) return false;
+      const n = normalOf.get(face);
+      if (!n) return false;
+      const mid: Vec2 = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+      for (let other = 0; other < sheetFaces.length; other++) {
+        if (other === face || !onEdge(sheetFaces[other]!, mid, mid)) continue;
+        const m = normalOf.get(other);
+        if (m && n[0] * m[0] + n[1] * m[1] + n[2] * m[2] < -0.5) return true;
+      }
+      return false;
+    };
     const byKind = new Map<LineKind, number[]>();
     const latest: number[] = [];
+    /*
+     * Seen through the paper, one line where the eye sees one: a crease
+     * pressed through a pile, every ply of it a hair from the next, showed
+     * through as a line drawn over and over and thickened with every fold.
+     * Lines lying within a millimetre of each other, the same way, are shown
+     * through once.
+     */
+    const hiddenByKind = new Map<LineKind, number[]>();
+    const seenThrough = new Set<string>();
+    const throughKey = (a: Vec2, b: Vec2) => {
+      const ang = ((Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI + 180) % 180;
+      return `${Math.round(((a[0] + b[0]) / 2) * 1000)},${Math.round(((a[1] + b[1]) / 2) * 1000)},${Math.round(ang / 3) % 60}`;
+    };
     for (const c of creases ?? []) {
       const style = LINE_STYLES[c.kind];
-      const segs = onTopOnly(segmentInSpace(state, c.a, c.b));
+      // On the paper it was pressed into, where the sheet says it is.
+      const segs = c.sheetA && c.sheetB
+        ? segmentInSpace(state, c.sheetA, c.sheetB, true).filter((g) => !closedEdge(g.face, g.sa, g.sb))
+        : onTopOnly(segmentInSpace(state, c.a, c.b));
       if (c.latest) addRibbon(segs, latest, reach * 0.0026);
       const list = byKind.get(c.kind) ?? [];
-      addRibbon(dashed(segs, style.dash), list, reach * 0.0011 * style.weight);
+      const ribbon = dashed(segs, style.dash);
+      addRibbon(ribbon, list, reach * 0.0011 * style.weight);
       byKind.set(c.kind, list);
+      const key = `${c.kind}:${throughKey(c.a, c.b)}`;
+      if (!seenThrough.has(key)) {
+        seenThrough.add(key);
+        const hidden = hiddenByKind.get(c.kind) ?? [];
+        addRibbon(ribbon, hidden, reach * 0.0011 * style.weight);
+        hiddenByKind.set(c.kind, hidden);
+      }
     }
     // Under the line itself, so the dashes still read on top of the glow.
     if (latest.length > 0) addMesh(latest, LATEST_STYLE.tint, 0.55);
     for (const [kind, pts] of byKind) {
-      addMesh(pts, LINE_STYLES[kind].tint, kind === 'crease' ? 0.85 : 1);
+      addMesh(pts, LINE_STYLES[kind].tint, kind === 'crease' ? 0.85 : 1, false, hiddenByKind.get(kind) ?? []);
     }
 
     /*
@@ -1375,7 +1468,9 @@ export function Stage3D({
       if (d.step !== undefined) labelled.set(d.step, i);
     });
     for (const [i, d] of (dimensions ?? []).entries()) {
-      const segs = onTopOnly(segmentInSpace(state, d.a, d.b));
+      const sheet = d.sheetA && d.sheetB ? { a: d.sheetA, b: d.sheetB } : null;
+      const onPaper = (a: Vec2, b: Vec2) => (sheet ? segmentInSpace(state, a, b, true) : onTopOnly(segmentInSpace(state, a, b)));
+      const segs = sheet ? onPaper(sheet.a, sheet.b) : onPaper(d.a, d.b);
       const pts: number[] = [];
       addRibbon(segs, pts, reach * 0.0013);
 
@@ -1387,22 +1482,21 @@ export function Stage3D({
        * lined up against it - and lining the next thing up is the only reason
        * to measure something in the first place.
        */
-      const dx = d.b[0] - d.a[0];
-      const dy = d.b[1] - d.a[1];
+      const ea = sheet ? sheet.a : d.a;
+      const eb = sheet ? sheet.b : d.b;
+      const dx = eb[0] - ea[0];
+      const dy = eb[1] - ea[1];
       const len = Math.hypot(dx, dy);
       if (len > 1e-9) {
         const tick = 0.004;
         const px = (-dy / len) * tick;
         const py = (dx / len) * tick;
-        for (const end of [d.a, d.b]) {
-          addRibbon(
-            onTopOnly(segmentInSpace(state,
-              [end[0] - px, end[1] - py], [end[0] + px, end[1] + py])),
-            pts, reach * 0.0013,
-          );
+        for (const end of [ea, eb]) {
+          addRibbon(onPaper([end[0] - px, end[1] - py], [end[0] + px, end[1] + py]), pts, reach * 0.0013);
         }
       }
-      addMesh(pts, 0x0f7a57);
+      // A span measured on paper since rolled into a pile is shown where it can be seen, not through every turn of the roll.
+      addMesh(pts, 0x0f7a57, 1, false, []);
       const mid = segs[0];
       if (!mid || !labels) continue;
       if (d.step !== undefined && labelled.get(d.step) !== i) continue;

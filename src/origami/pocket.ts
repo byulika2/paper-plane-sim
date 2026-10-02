@@ -45,6 +45,8 @@ export interface PocketOption {
   readonly lines: readonly PocketLine[];
   /** The paper after it, for a preview. */
   readonly state: FoldedState;
+  /** It folds along a line already pressed into the paper, other than the fold line itself. */
+  readonly pressed?: boolean;
 }
 
 const EPS = 1e-9;
@@ -208,6 +210,13 @@ const sameAngle = (a: number, b: number) => {
   const d = Math.abs(a - b) % (2 * Math.PI);
   return Math.min(d, 2 * Math.PI - d) < 0.01;
 };
+/** How far apart two directions are, radians, the short way round. */
+const angleGap = (a: number, b: number) => {
+  const d = Math.abs(a - b) % (2 * Math.PI);
+  return Math.min(d, 2 * Math.PI - d);
+};
+/** How near a 맞춰 접기 crease has to come to a pressed one to fold on it: five degrees. */
+const SNAP_TO_PRESSED = (5 * Math.PI) / 180;
 const rayOf = (d: Vec2): Ray => {
   const n = Math.hypot(d[0], d[1]) || 1;
   const dir: Vec2 = [d[0] / n, d[1] / n];
@@ -330,6 +339,8 @@ export function pocketOptions(
    * only the ways that use it are offered.
    */
   wanted: readonly PocketWish[] = [],
+  /** Lines pressed into the paper, on the sheet: creases folded and opened again, which are no edges of the folded state. */
+  pressed: readonly { a: Vec2; b: Vec2 }[] = [],
 ): PocketOption[] {
   const g = s.graph;
   const movSign = Math.sign(side(a, b, moving));
@@ -358,8 +369,18 @@ export function pocketOptions(
     const probe = (k: number): Vec2 => [h.P[0] + d[0] * k * 1e-4, h.P[1] + d[1] * k * 1e-4];
     return rayOf(inPoly(poly, probe(1)) ? d : [-d[0], -d[1]]);
   };
-  const L = lineIn(h.A);
-  const Lb = lineIn(h.B);
+  // The crease edges from the corner: a line drawn along one of them is it, to the last digit.
+  const edgeRays: Ray[] = g.edges_vertices.flatMap(([u, v], e) => {
+    if (g.edges_assignment[e] === 'boundary') return [];
+    const A = g.vertices_coords[u]!;
+    const B = g.vertices_coords[v]!;
+    const from = Math.hypot(A[0] - h.P[0], A[1] - h.P[1]) < 1e-6 ? B
+      : Math.hypot(B[0] - h.P[0], B[1] - h.P[1]) < 1e-6 ? A : null;
+    return from ? [rayOf([from[0] - h.P[0], from[1] - h.P[1]])] : [];
+  });
+  const exactly = (r: Ray) => edgeRays.find((q) => sameAngle(q.angle, r.angle)) ?? r;
+  const L = exactly(lineIn(h.A));
+  const Lb = exactly(lineIn(h.B));
 
   const mir = (l: PocketLine): PocketLine | null => (mirrorX === undefined ? null
     : { a: [2 * mirrorX - l.a[0], l.a[1]], b: [2 * mirrorX - l.b[0], l.b[1]], kind: l.kind });
@@ -378,6 +399,17 @@ export function pocketOptions(
    * ones that lie flat and stack are offered, one per distinct result.
    */
   const straight = rayOf([-L.dir[0], -L.dir[1]]);
+  // The creases already pressed into the paper that run from the corner.
+  const pressedRays: Ray[] = edgeRays.concat(pressed.flatMap((m) => {
+    // A pressed line through the corner runs from it both ways, as far as it goes.
+    const d: Vec2 = [m.b[0] - m.a[0], m.b[1] - m.a[1]];
+    const len = Math.hypot(d[0], d[1]);
+    if (!(len > 1e-9)) return [];
+    const off = Math.abs((h.P[0] - m.a[0]) * d[1] - (h.P[1] - m.a[1]) * d[0]) / len;
+    if (off > 1e-5) return [];
+    const t = ((h.P[0] - m.a[0]) * d[0] + (h.P[1] - m.a[1]) * d[1]) / (len * len);
+    return [...(t > 1e-6 ? [rayOf([-d[0], -d[1]])] : []), ...(t < 1 - 1e-6 ? [rayOf(d)] : [])];
+  })).filter((r) => ![L, Lb, hm, hs].some((x) => sameAngle(x.angle, r.angle)));
   const wishRays = wanted.flatMap((w) => [h.A, h.B].flatMap((face) => {
     const qa = toSheet(face, w.a);
     const qb = toSheet(face, w.b);
@@ -391,7 +423,19 @@ export function pocketOptions(
     // one of the two that halve the angle between one line and the other, and
     // the pocket may need the other, square to it.
     const dirs: Vec2[] = w.how === 'along' ? [d, [-d[0], -d[1]]] : [d, [-d[0], -d[1]], [-d[1], d[0]], [d[1], -d[0]]];
-    return dirs.map((q) => ({ ray: rayOf(q), name: w.how === 'along' ? '고른 선' : '맞춘 선' }));
+    /*
+     * Lined up by eye against a line already pressed into the paper, the hand
+     * folds on that line: the crease that is there takes the fold, and the
+     * paper that does not fit is pushed out sideways by the creases left to
+     * find. Within a few degrees of a pressed crease through the corner, 맞춰
+     * 접기 uses the pressed crease. Taken exactly as aimed, it folded a few
+     * degrees off the line the paper was creased on.
+     */
+    return dirs.map((q) => {
+      const ray = rayOf(q);
+      const pressed = w.how === 'align' ? pressedRays.find((c) => angleGap(c.angle, ray.angle) < SNAP_TO_PRESSED) : undefined;
+      return { ray: pressed ?? ray, name: w.how === 'along' ? '고른 선' : pressed ? '맞춘 선(자국 따라)' : '맞춘 선' };
+    });
   }));
   /*
    * 선대로 접기 means a line that is on the paper. Seen from above, the line
@@ -425,7 +469,16 @@ export function pocketOptions(
     { ray: bis(straight, hs), name: '사이 선' },
     ...wishRays,
   ].filter((c, i, all) => all.findIndex((d) => sameAngle(d.ray.angle, c.ray.angle)) === i
-    && ![L, hm, hs].some((r) => sameAngle(r.angle, c.ray.angle)));
+    && ![L, hm, hs].some((r) => sameAngle(r.angle, c.ray.angle)))
+    /*
+     * A line that runs where a crease is already pressed is that crease,
+     * exactly: worked out from a line picked on screen it ran a hair beside
+     * it, which split off a sliver of paper and no longer folded flat.
+     */
+    .map((c) => {
+      const there = pressedRays.find((q) => sameAngle(q.angle, c.ray.angle));
+      return there ? { ...c, ray: there } : c;
+    });
   const kawasaki = (angles: number[]): boolean => {
     const g2 = [...angles].sort((x, y) => x - y);
     let alt = 0;
@@ -530,6 +583,7 @@ export function pocketOptions(
           label: `방법 ${n}`,
           detail: [...plan.names, ...(carried ? ['접힌 곳 따라 이어짐'] : [])].join(' · ') || '접는 선만',
           lines: all, state: r.state,
+          pressed: plan.closed.some((x) => pressedRays.some((q) => sameAngle(q.angle, x.angle))),
         });
       }
     }

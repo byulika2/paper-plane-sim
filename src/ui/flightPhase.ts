@@ -81,6 +81,6 @@ export function momentAt(path: readonly FlightPoint[], t: number): FlightPoint {
     t, x: a.x + (b.x - a.x) * u, h: a.h + (b.h - a.h) * u, pitch: a.pitch + (b.pitch - a.pitch) * u,
     speed: mix(a.speed, b.speed), alpha: mix(a.alpha, b.alpha), gamma: turn(a.gamma, b.gamma), bank: mix(a.bank, b.bank),
     lift: mix(a.lift, b.lift), drag: mix(a.drag, b.drag), gx: mix(a.gx, b.gx), gy: mix(a.gy, b.gy), heading: turn(a.heading, b.heading),
-    fwd: blend(a.fwd, b.fwd, u), up: blend(a.up, b.up, u),
+    fwd: blend(a.fwd, b.fwd, u), up: blend(a.up, b.up, u), nose: blend(a.nose, b.nose, u), top: blend(a.top, b.top, u),
   };
 }
